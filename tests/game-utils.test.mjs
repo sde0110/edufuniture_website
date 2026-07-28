@@ -11,8 +11,11 @@ test("privacy-safe phone and game utilities are present", async () => {
 });
 
 test("the complete playable flow is represented", async () => {
-  const source = await readFile("app/page.tsx", "utf8");
+  const source = `${await readFile("app/page.tsx", "utf8")}\n${await readFile("src/game/rooms.ts", "utf8")}`;
   for (const text of ["새 게임", "이어하기", "영유아기", "어린이집", "사춘기", "대학 입시", "다섯 번째 서랍", "마음속으로 편지 남기기", "전화 걸기"]) {
     assert.match(source, new RegExp(text));
+  }
+  for (const interaction of ["태엽 손잡이", "이름표", "생일 케이크", "휴대전화 충전기", "성장일기", "diaryPages"]) {
+    assert.match(source, new RegExp(interaction));
   }
 });

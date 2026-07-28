@@ -4,22 +4,28 @@ import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { maskPhoneNumber, sanitizePhoneNumber, validateFinalAnswer } from "../src/utils/game";
+import { maskPhoneNumber, sanitizePhoneNumber } from "../src/utils/game";
+import { diaryPages, Direction, itemIcons, Room, rooms, SceneObject } from "../src/game/rooms";
 
 type Screen = "title" | "intro" | "game" | "ending" | "credits";
-type Direction = "front" | "right" | "back" | "left";
-type Room = { id:number; era:string; title:string; year:string; letter:string; item:string; icon:string; palette:string; objects:string[]; puzzle:string; clue:string; solution:string; label:string; memory:string[]; note:string; hints:string[] };
 
-const rooms: Room[] = [
-  {id:1,era:"영유아기",title:"아주 작은 나의 방",year:"1998",letter:"기",item:"모빌의 별",icon:"✦",palette:"nursery",objects:["커다란 곰 인형","가족사진","흔들의자","천장 모빌"],puzzle:"새벽의 숫자",clue:"곰의 단추 · 사진 속 사람 · 모빌의 별",solution:"337",label:"세 자리 숫자",memory:["나는 이 밤을 기억하지 못한다.","엄마는 내가 조용히 숨 쉬는 걸 확인하고서야 잠들었다."],note:"새벽 3시 37분. 오늘도 많이 울었지만 우유를 먹고 잠들었다.",hints:["방 안에서 셀 수 있는 것들을 찾아보자.","곰, 사진, 별의 순서다.","정답은 337이다."]},
-  {id:2,era:"어린이집",title:"비 오는 날의 교실",year:"2003",letter:"억",item:"네잎클로버",icon:"♧",palette:"classroom",objects:["원아수첩","비 오는 창문","장난감 주방","도시락"],puzzle:"오늘의 도시락",clue:"원아수첩 속 그림 순서를 따라 반찬을 적자",solution:"김달걀당근멸치",label:"반찬 네 가지",memory:["나는 엄마가 늦게 왔다고 기억했다.","하지만 엄마는 내가 나오기 전부터 기다리고 있었다."],note:"오늘도 씩씩하게 다녀오자.",hints:["수첩의 답글에 좋아하는 반찬이 있다.","김부터 시작해 보자.","김, 달걀, 당근, 멸치 순서다."]},
-  {id:3,era:"사춘기",title:"닫힌 문 앞",year:"2011",letter:"하",item:"숟가락",icon:"⌇",palette:"hallway",objects:["굳게 닫힌 방문","식어 가는 미역국","찌그러진 케이크","주방시계"],puzzle:"반복해서 데운 국",clue:"전자레인지에 남은 마지막 시각을 맞추자",solution:"2130",label:"네 자리 시각",memory:["나는 엄마가 나를 내버려두었다고 생각했다.","엄마는 내가 열어주지 않는 문 앞에서 기다리고 있었다."],note:"화를 내고 문을 닫았지만 배가 고프면 나오겠지. 국이 너무 짜지 않았으면 좋겠다.",hints:["기록된 시각은 점점 늦어진다.","마지막으로 데운 시간을 보자.","정답은 2130이다."]},
-  {id:4,era:"대학 입시",title:"불 꺼지지 않는 책상",year:"2016",letter:"지",item:"낡은 손목시계",icon:"◷",palette:"study",objects:["빽빽한 문제집","꺼진 휴대전화","합격 발표 화면","멈춘 손목시계"],puzzle:"전송되지 않은 시간",clue:"휴대전화의 마지막 메시지 시각",solution:"1147",label:"네 자리 시각",memory:["그날 나는 내 노력이 결실을 맺었다고 생각했다.","그 노력 뒤에 누군가의 포기가 있었다는 건 몰랐다."],note:"결과가 어떻든 괜찮아. 엄마한테는 네가 제일 중요해. — 전송되지 않음, 11:47",hints:["꺼진 휴대전화에 충전기를 연결해 보자.","전송되지 않은 메시지의 시각이다.","정답은 1147이다."]},
-  {id:5,era:"현재",title:"내 방이 사라진 본가",year:"오늘",letter:"",item:"성장일기",icon:"▤",palette:"home",objects:["벽의 키 자국","바닥의 책상 자국","문 뒤 스티커","천장의 야광별"],puzzle:"다섯 번째 서랍",clue:"네 개의 물건에서 드러난 글자를 이어 보자",solution:"기억하지",label:"일기의 빈칸",memory:["나는 사랑을 찾기 위해 다섯 개의 방을 지나왔다.","하지만 그 사랑은 서랍 속에 숨겨져 있던 것이 아니었다."],note:"네가 ______ 못해도 우리는 네 모든 날을 기억한다.",hints:["지금까지 얻은 글자를 살펴보자.","기 · 억 · 하 · 지를 이어 보자.","정답은 기억하지다."]},
-];
-
-type Store={room:number;completed:number[];inventory:string[];hints:Record<number,number>;sound:boolean;neutral:boolean;finished:boolean;setRoom:(n:number)=>void;complete:(r:Room)=>void;hint:(n:number)=>void;toggleSound:()=>void;setNeutral:(v:boolean)=>void;finish:()=>void;reset:()=>void};
-const useGame=create<Store>()(persist((set)=>({room:1,completed:[],inventory:[],hints:{},sound:true,neutral:false,finished:false,setRoom:(room)=>set({room}),complete:(r)=>set(s=>({completed:s.completed.includes(r.id)?s.completed:[...s.completed,r.id],inventory:s.inventory.includes(r.item)?s.inventory:[...s.inventory,r.item]})),hint:(n)=>set(s=>({hints:{...s.hints,[n]:Math.min((s.hints[n]??0)+1,3)}})),toggleSound:()=>set(s=>({sound:!s.sound})),setNeutral:(neutral)=>set({neutral}),finish:()=>set({finished:true}),reset:()=>set({room:1,completed:[],inventory:[],hints:{},finished:false})}),{name:"fifth-drawer-save",storage:createJSONStorage(()=>localStorage),partialize:({room,completed,inventory,hints,sound,neutral,finished})=>({room,completed,inventory,hints,sound,neutral,finished})}));
+type Store={
+  room:number;completed:number[];inventory:string[];progress:Record<number,number>;hints:Record<string,number>;
+  selectedItem:string|null;sound:boolean;neutral:boolean;finished:boolean;
+  setRoom:(n:number)=>void;complete:(r:Room)=>void;advance:(roomId:number,rewards?:string[])=>void;
+  hint:(key:string)=>void;selectItem:(item:string|null)=>void;toggleSound:()=>void;setNeutral:(v:boolean)=>void;
+  finish:()=>void;reset:()=>void;
+};
+const useGame=create<Store>()(persist((set)=>({
+  room:1,completed:[],inventory:[],progress:{},hints:{},selectedItem:null,sound:true,neutral:false,finished:false,
+  setRoom:(room)=>set({room,selectedItem:null}),
+  complete:(r)=>set(s=>({completed:s.completed.includes(r.id)?s.completed:[...s.completed,r.id],inventory:s.inventory.includes(r.item)?s.inventory:[...s.inventory,r.item],selectedItem:null})),
+  advance:(roomId,rewards=[])=>set(s=>({progress:{...s.progress,[roomId]:(s.progress[roomId]??0)+1},inventory:[...s.inventory,...rewards.filter(item=>!s.inventory.includes(item))],selectedItem:null})),
+  hint:(key)=>set(s=>({hints:{...s.hints,[key]:Math.min((s.hints[key]??0)+1,3)}})),
+  selectItem:(selectedItem)=>set({selectedItem}),toggleSound:()=>set(s=>({sound:!s.sound})),
+  setNeutral:(neutral)=>set({neutral}),finish:()=>set({finished:true}),
+  reset:()=>set({room:1,completed:[],inventory:[],progress:{},hints:{},selectedItem:null,finished:false}),
+}),{name:"fifth-drawer-save",version:2,storage:createJSONStorage(()=>localStorage),partialize:({room,completed,inventory,progress,hints,selectedItem,sound,neutral,finished})=>({room,completed,inventory,progress,hints,selectedItem,sound,neutral,finished})}));
 
 function Modal({title,children,close}:{title:string;children:React.ReactNode;close:()=>void}){
   useEffect(()=>{const onKey=(e:KeyboardEvent)=>e.key==="Escape"&&close();window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey)},[close]);
@@ -39,9 +45,38 @@ function Title({go}:{go:(s:Screen)=>void}){
 function Intro({go}:{go:(s:Screen)=>void}){const[step,setStep]=useState(0);const lines=["오랜만에 부모님의 집을 찾았다.","내가 사용하던 방은 이미 사라지고 없었다.","엄마는 서랍을 정리하다 발견했다며 작은 열쇠 하나를 내게 건넸다.","“이게 네 방에 있던 건데, 어디 열쇠인지는 모르겠다.”"];return <main className="prologue"><div className="clock" aria-hidden="true"><span>XI</span><i/><b>VI</b></div><div className={`ghost-door ${step>=3?"visible":""}`}/><section className="dialogue" aria-live="polite" onClick={()=>step<3?setStep(step+1):go("game")}><p className="eyebrow">{step===3?"엄마":"나"}</p><p>{lines[step]}</p><span>{step===3?"문 열기":"계속"} ↘</span></section></main>}
 
 function Game({go}:{go:(s:Screen)=>void}){
- const store=useGame(),room=rooms[store.room-1];const[direction,setDirection]=useState<Direction>("front"),[modal,setModal]=useState<"inspect"|"puzzle"|"hint"|"memory"|null>(null),[selected,setSelected]=useState(room.objects[0]),[answer,setAnswer]=useState(""),[error,setError]=useState("");const solved=store.completed.includes(room.id),dirs:Direction[]=["front","right","back","left"],idx=dirs.indexOf(direction),level=store.hints[room.id]??0,currentObject=room.objects[idx],selectedIndex=Math.max(0,room.objects.indexOf(selected));
- const submit=()=>{const ok=room.id===5?validateFinalAnswer(answer):answer.replace(/\s/g,"")===room.solution;if(!ok)return setError("아직 열리지 않는다. 단서를 다시 천천히 살펴보자.");store.complete(room);setError("");setModal("memory")};
- const advance=()=>{setModal(null);setAnswer("");if(room.id===5){store.finish();go("ending")}else{store.setRoom(room.id+1);setDirection("front")}};
+ const store=useGame(),room=rooms[store.room-1],stepIndex=Math.min(store.progress[room.id]??0,room.steps.length-1),step=room.steps[stepIndex];
+ const[direction,setDirection]=useState<Direction>("front"),[modal,setModal]=useState<"inspect"|"puzzle"|"hint"|"memory"|null>(null);
+ const[selected,setSelected]=useState<SceneObject>(room.objects[0]),[answer,setAnswer]=useState(""),[sequence,setSequence]=useState<string[]>([]),[diaryPage,setDiaryPage]=useState(0),[error,setError]=useState("");
+ const solved=store.completed.includes(room.id),dirs:Direction[]=["front","right","back","left"],idx=dirs.indexOf(direction),objectsInView=room.objects.filter(object=>object.direction===direction),selectedIndex=Math.max(0,room.objects.findIndex(object=>object.id===selected.id));
+ const hintKey=`${room.id}-${step.id}`,level=store.hints[hintKey]??0;
+ const finishStep=()=>{
+   store.advance(room.id,step.reward);
+   setAnswer("");setSequence([]);setDiaryPage(0);setError("");
+   if(stepIndex===room.steps.length-1){store.complete(room);setModal("memory")}
+   else setModal(null);
+ };
+ const checkRequired=()=>{
+   const missing=(step.requires??[]).filter(item=>!store.inventory.includes(item));
+   if(missing.length){setError(`아직 ${missing.join(", ")}이(가) 필요하다.`);return false}
+   if(step.mode==="action"&&step.requires?.length===1&&store.selectedItem!==step.requires[0]){setError(`인벤토리에서 ‘${step.requires[0]}’을(를) 먼저 선택하자.`);return false}
+   return true;
+ };
+ const submit=()=>{
+   if(!checkRequired())return;
+   const ok=answer.replace(/\s/g,"")===String(step.solution??"").replace(/\s/g,"");
+   if(!ok)return setError("아직 맞지 않는다. 주변의 단서를 다시 천천히 살펴보자.");
+   finishStep();
+ };
+ const act=()=>{if(checkRequired())finishStep()};
+ const choose=(choice:string)=>{
+   const expected=step.solution as string[],next=[...sequence,choice];setSequence(next);setError("");
+   if(next.length===expected.length){
+     if(next.every((value,i)=>value===expected[i]))finishStep();
+     else{setSequence([]);setError("순서가 맞지 않아 처음 위치로 돌아왔다.")}
+   }
+ };
+ const advanceRoom=()=>{setModal(null);setDirection("front");setAnswer("");setSequence([]);setDiaryPage(0);setError("");if(room.id===5){store.finish();go("ending")}else{setSelected(rooms[room.id].objects[0]);store.setRoom(room.id+1)}};
  return <main className="game-shell"><header className="game-header"><div><p>다섯 번째 서랍</p><span>The Fifth Drawer</span></div><div className="chapter"><span>기억 {String(room.id).padStart(2,"0")}</span><strong>{room.era}</strong></div><nav><button onClick={()=>setModal("hint")}>힌트 <em>{level}/3</em></button><button onClick={store.toggleSound} aria-label={store.sound?"소리 끄기":"소리 켜기"}>{store.sound?"♪":"♩"}</button><button onClick={()=>go("title")} aria-label="메뉴">☰</button></nav></header>
  <section className={`scene ${room.palette} view-${direction}`}><div className="scene-wash"/><div className="year-stamp">{room.year}</div><div key={`${room.id}-${direction}`} className="room-art" aria-hidden="true">
  {direction==="front"&&<div className="front-scene"><div className="window"><i/><i/><i/></div><div className="cabinet"><span/><span/><span/><span/><span/></div><div className="furniture"/><div className="lamp"/>{room.id===1&&<div className="mobile">☾ · ✦ · ☁ · ᨒ</div>}</div>}
@@ -49,14 +84,22 @@ function Game({go}:{go:(s:Screen)=>void}){
  {direction==="back"&&<div className="back-scene"><div className="back-door"><i/></div><div className="wall-clock"><i/><b/></div><div className="hall-rug"/>{room.id===3&&<div className="door-note">밥은 먹어.</div>}</div>}
  {direction==="left"&&<div className="left-scene"><div className="tall-shelf"><span/><span/><span/><span/></div><div className="armchair"/><div className="memory-box"><i/><i/><i/></div>{room.id===5&&<div className="stars">✦　·　✦　·</div>}</div>}
  </div>
- <button className={`hotspot current-hotspot hotspot-view-${direction}`} aria-label={`${currentObject} 확대 조사하기`} onClick={()=>{setSelected(currentObject);setModal(idx===3?"puzzle":"inspect")}}><span>{idx+1}</span><b>{currentObject}</b><em>조사하기</em></button>
+ {objectsInView.map((object,objectIndex)=><button key={object.id} style={{left:`${object.x}%`,top:`${object.y}%`}} className={`hotspot ${step.target===object.id?"active-hotspot":""}`} aria-label={`${object.name} 확대 조사하기`} onClick={()=>{setSelected(object);setModal("inspect")}}><span>{objectIndex+1}</span><b>{object.name}</b><em>{step.target===object.id?"현재 단서":"조사하기"}</em></button>)}
  <button className="turn left" onClick={()=>setDirection(dirs[(idx+3)%4])} aria-label="왼쪽 방향 보기">‹</button><button className="turn right" onClick={()=>setDirection(dirs[(idx+1)%4])} aria-label="오른쪽 방향 보기">›</button>
- <div className="view-map" aria-label="방향 선택">{dirs.map((d,i)=><button key={d} className={direction===d?"active":""} onClick={()=>setDirection(d)} aria-label={`${i+1}번 방향 보기`}>{i+1}</button>)}</div><div className="direction-label"><span>◌</span> {direction==="front"?"정면":direction==="right"?"오른쪽":direction==="back"?"뒤쪽":"왼쪽"} · {currentObject}</div></section>
- <footer className="game-footer"><section className="inventory" aria-label="인벤토리"><p>기억의 물건 <span>{store.inventory.length}/5</span></p><div>{[0,1,2,3,4].map(slot=>{const item=rooms.find(r=>r.item===store.inventory[slot]);return <button key={slot} disabled={!item} aria-label={item?.item??`빈 칸 ${slot+1}`}>{item?<><i>{item.icon}</i><small>{item.item}</small></>:<b>{slot+1}</b>}</button>})}</div></section><section className="inner-voice" aria-live="polite"><p>{solved?"기억이 되돌아왔다.":room.id===3?"이 문은 열 수 없다. 누군가의 마음은 억지로 열 수 없으니까.":"익숙한데, 아주 오래된 꿈속 같다."}</p><span>{room.title}</span></section></footer>
- {modal==="inspect"&&<Modal title={selected} close={()=>setModal(null)}><div className={`inspect-visual ${room.palette} inspect-${selectedIndex}`}><div className="inspect-light"/><div className="inspect-object"><i/><i/><i/></div><span>{String(selectedIndex+1).padStart(2,"0")} / 확대 조사</span><b>{room.icon}</b></div><p className="large-copy">{selected==="굳게 닫힌 방문"?"이 문은 열 수 없다. 누군가의 마음은 억지로 열 수 없으니까.":room.clue}</p><p className="paper-note">{room.note}</p><button className="primary" onClick={()=>setModal("puzzle")}>퍼즐 살펴보기 <span>→</span></button></Modal>}
- {modal==="puzzle"&&<Modal title={room.puzzle} close={()=>setModal(null)}><p className="large-copy">{room.clue}</p>{room.id===5&&<div className="letter-row">{["기","억","하","지"].map(l=><i key={l}>{l}</i>)}</div>}<label className="answer-field">{room.label}<input autoFocus value={answer} maxLength={20} onChange={e=>setAnswer(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="정답을 입력하세요"/></label>{error&&<p className="error" role="alert">{error}</p>}<button className="primary" onClick={submit}>서랍 열기 <span>→</span></button></Modal>}
- {modal==="hint"&&<Modal title={`힌트 ${Math.max(1,level)}/3`} close={()=>setModal(null)}><p className="large-copy">{room.hints[Math.max(0,level-1)]}</p><button className="primary" onClick={()=>store.hint(room.id)}>{level>=3?"마지막 힌트입니다":"조금 더 알려주세요"} <span>＋</span></button></Modal>}
- {modal==="memory"&&<Modal title={`${room.item}을(를) 찾았다`} close={advance}><div className="found-item">{room.icon}</div>{room.memory.map(line=><p className="memory-line" key={line}>{line}</p>)}{room.letter&&<div className="found-letter"><span>되찾은 글자</span><b>{room.letter}</b></div>}<button className="primary" onClick={advance}>{room.id===5?"마지막 페이지 넘기기":"다음 기억으로"} <span>→</span></button></Modal>}</main>
+ <div className="view-map" aria-label="방향 선택">{dirs.map((d,i)=><button key={d} className={direction===d?"active":""} onClick={()=>setDirection(d)} aria-label={`${i+1}번 방향 보기`}>{i+1}</button>)}</div><div className="direction-label"><span>◌</span> {direction==="front"?"정면":direction==="right"?"오른쪽":direction==="back"?"뒤쪽":"왼쪽"} · 조사 지점 {objectsInView.length}개</div><div className="puzzle-progress"><span>{stepIndex+1} / {room.steps.length}</span><b>{step.title}</b></div></section>
+ <footer className="game-footer"><section className="inventory" aria-label="인벤토리"><p>찾은 물건 <span>{store.inventory.length}</span> <small>사용할 물건을 선택하세요</small></p><div>{store.inventory.length?store.inventory.map(item=><button key={item} className={store.selectedItem===item?"selected":""} onClick={()=>store.selectItem(store.selectedItem===item?null:item)} aria-pressed={store.selectedItem===item} aria-label={`${item}${store.selectedItem===item?" 선택됨":""}`}><i>{itemIcons[item]??"·"}</i><small>{item}</small></button>):[0,1,2,3].map(slot=><button key={slot} disabled aria-label={`빈 칸 ${slot+1}`}><b>{slot+1}</b></button>)}</div></section><section className="inner-voice" aria-live="polite"><p>{solved?"기억이 되돌아왔다.":`지금은 ‘${step.title}’의 단서를 찾아야 한다.`}</p><span>{room.title} · {stepIndex+1}번째 퍼즐</span></section></footer>
+ {modal==="inspect"&&<Modal title={selected.name} close={()=>setModal(null)}><div className={`inspect-visual ${room.palette} inspect-${selectedIndex%4}`}><div className="inspect-light"/><div className="inspect-object"><i/><i/><i/></div><span>{String(selectedIndex+1).padStart(2,"0")} / 확대 조사</span><b>{room.icon}</b></div><p className="large-copy">{selected.description}</p><p className="paper-note">{selected.detail}</p>{step.target===selected.id?<button className="primary" onClick={()=>{setModal("puzzle");setError("");setSequence([])}}>{step.title} 시작 <span>→</span></button>:<p className="quiet-status">지금 풀 퍼즐의 직접적인 조작 지점은 아니다. 단서는 기억해 두자.</p>}</Modal>}
+ {modal==="puzzle"&&<Modal title={step.title} close={()=>setModal(null)}><p className="large-copy">{step.prompt}</p>
+   {step.mode==="sequence"&&<><div className="sequence-display">{(step.solution as string[]).map((_,i)=><i key={i}>{sequence[i]??"?"}</i>)}</div><div className="choice-grid">{step.choices?.map(choice=><button key={choice} onClick={()=>choose(choice)}>{choice}</button>)}</div><button className="text-button" onClick={()=>{setSequence([]);setError("")}}>순서 다시 놓기</button></>}
+   {step.mode==="code"&&<label className="answer-field">정답 입력<input autoFocus value={answer} maxLength={20} onChange={e=>setAnswer(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="단서에서 찾은 답"/></label>}
+   {step.mode==="diary"&&<div className="diary-book"><span>{diaryPage+1} / {diaryPages.length}</span>{diaryPages[diaryPage].map(line=><p key={line}>{line}</p>)}</div>}
+   {error&&<p className="error" role="alert">{error}</p>}
+   {step.mode==="action"&&<button className="primary" onClick={act}>실행하기 <span>→</span></button>}
+   {step.mode==="code"&&<button className="primary" onClick={submit}>확인하기 <span>→</span></button>}
+   {step.mode==="diary"&&<button className="primary" onClick={()=>{if(!checkRequired())return;if(diaryPage<diaryPages.length-1)setDiaryPage(diaryPage+1);else finishStep()}}>{diaryPage<diaryPages.length-1?"다음 페이지":"마지막 문장 기억하기"} <span>→</span></button>}
+ </Modal>}
+ {modal==="hint"&&<Modal title={`${step.title} · 힌트 ${Math.max(1,level)}/3`} close={()=>setModal(null)}><p className="large-copy">{step.hints[Math.max(0,level-1)]}</p><button className="primary" onClick={()=>store.hint(hintKey)}>{level>=3?"마지막 힌트입니다":"조금 더 알려주세요"} <span>＋</span></button></Modal>}
+ {modal==="memory"&&<Modal title={`${room.item}을(를) 찾았다`} close={advanceRoom}><div className="found-item">{room.icon}</div>{room.memory.map(line=><p className="memory-line" key={line}>{line}</p>)}{room.letter&&<div className="found-letter"><span>되찾은 글자</span><b>{room.letter}</b></div>}<button className="primary" onClick={advanceRoom}>{room.id===5?"마지막 페이지 넘기기":"다음 기억으로"} <span>→</span></button></Modal>}</main>
 }
 
 function Ending({go}:{go:(s:Screen)=>void}){
