@@ -28,12 +28,12 @@ function Modal({title,children,close}:{title:string;children:React.ReactNode;clo
 
 function Title({go}:{go:(s:Screen)=>void}){
  const {completed,neutral,setNeutral,reset}=useGame();const [notice,setNotice]=useState(false);
- return <main className="title-screen"><div className="title-copy"><p className="overline">A QUIET POINT & CLICK STORY</p><h1><span>다섯 번째</span> 서랍</h1><p className="subtitle">The Fifth Drawer</p><div className="rule"/><p className="title-quote">기억하지 못한 날에도<br/>사랑은 그곳에 있었다.</p></div><div className="drawer-menu" aria-label="주 메뉴">
+ return <main className="title-screen"><div className="title-copy"><p className="overline">A QUIET POINT & CLICK MYSTERY</p><h1><span>다섯 번째</span> 서랍</h1><p className="subtitle">The Fifth Drawer</p><div className="rule"/><p className="title-quote">네 개의 서랍은 닫혀 있었다.<br/>다섯 번째만 빼고.</p></div><div className="drawer-menu" aria-label="주 메뉴">
   <button onClick={()=>{reset();setNotice(true)}}><b>01</b><span>새 게임<small>처음부터 기억을 따라갑니다</small></span><i>→</i></button>
   <button disabled={!completed.length} onClick={()=>go("game")}><b>02</b><span>이어하기<small>{completed.length?`${completed.length}개의 기억을 찾았습니다`:"저장된 기억이 없습니다"}</small></span><i>→</i></button>
   <button onClick={()=>setNeutral(!neutral)}><b>03</b><span>호칭 설정<small>{neutral?"소중한 사람":"엄마"}로 표현합니다</small></span><i>{neutral?"중립":"기본"}</i></button>
   <button onClick={()=>go("credits")}><b>04</b><span>크레딧<small>이 이야기를 만든 마음들</small></span><i>→</i></button>
- </div><p className="title-foot">이어폰 없이도 모든 이야기를 온전히 경험할 수 있습니다.</p>{notice&&<Modal title="천천히 시작해도 괜찮아요" close={()=>setNotice(false)}><p className="large-copy">이 게임은 가족과 성장에 관한 이야기를 담고 있습니다.<br/>편안한 마음으로 천천히 플레이해주세요.</p><button className="primary" onClick={()=>go("intro")}>작은 열쇠 받기 <span>→</span></button></Modal>}</main>
+ </div><p className="title-foot">작은 소리와 희미한 흔적을 천천히 살펴보세요.</p>{notice&&<Modal title="어디에도 맞지 않는 열쇠" close={()=>setNotice(false)}><p className="large-copy">오래된 서랍에서 작은 열쇠 하나를 발견했다.<br/>무엇을 여는 열쇠인지는 알 수 없다.</p><p className="paper-note">불을 끄고, 서두르지 말고, 방 안의 흔적을 따라가세요.</p><button className="primary" onClick={()=>go("intro")}>열쇠를 집어 든다 <span>→</span></button></Modal>}</main>
 }
 
 function Intro({go}:{go:(s:Screen)=>void}){const[step,setStep]=useState(0);const lines=["오랜만에 부모님의 집을 찾았다.","내가 사용하던 방은 이미 사라지고 없었다.","엄마는 서랍을 정리하다 발견했다며 작은 열쇠 하나를 내게 건넸다.","“이게 네 방에 있던 건데, 어디 열쇠인지는 모르겠다.”"];return <main className="prologue"><div className="clock" aria-hidden="true"><span>XI</span><i/><b>VI</b></div><div className={`ghost-door ${step>=3?"visible":""}`}/><section className="dialogue" aria-live="polite" onClick={()=>step<3?setStep(step+1):go("game")}><p className="eyebrow">{step===3?"엄마":"나"}</p><p>{lines[step]}</p><span>{step===3?"문 열기":"계속"} ↘</span></section></main>}
