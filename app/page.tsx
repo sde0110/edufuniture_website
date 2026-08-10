@@ -49,16 +49,6 @@ const products = [
   { number: "04", name: "맞춤 제작 가구", copy: "학교 현장 실측부터 제작·납품까지 공간에 꼭 맞는 제안", tag: "Custom" },
 ];
 
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <i />
-      <i />
-      <i />
-    </span>
-  );
-}
-
 export default function Home() {
   const [slide, setSlide] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -92,8 +82,7 @@ export default function Home() {
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기">×</button>
         <a className="brand" href="#top" onClick={() => setMenuOpen(false)}>
-          <BrandMark />
-          <span><strong>에듀퍼니처</strong><small>Edufurniture</small></span>
+          <img src="/assets/edufurniture-logo.png" alt="에듀퍼니처 Edufurniture" />
         </a>
         <p className="brand-copy">학교의 하루를<br />더 편안하게 만듭니다.</p>
         <nav aria-label="주요 메뉴">
@@ -216,7 +205,7 @@ export default function Home() {
         </section>
 
         <footer>
-          <a className="brand footer-brand" href="#top"><BrandMark /><span><strong>에듀퍼니처</strong><small>Edufurniture</small></span></a>
+          <a className="brand footer-brand" href="#top"><img src="/assets/edufurniture-logo.png" alt="에듀퍼니처 Edufurniture" /></a>
           <p>대표 신인수　|　교육용·사무용 제작가구<br />M. 010.2313.0520　F. 050.4223.0520　E. bmgshin@naver.com</p>
           <small>© {new Date().getFullYear()} EDUFURNITURE. ALL RIGHTS RESERVED.</small>
         </footer>
