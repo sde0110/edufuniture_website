@@ -2,6 +2,16 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
+type QuoteDraft = {
+  name: string;
+  school: string;
+  phone: string;
+  details: string;
+};
+
+const emptyQuote: QuoteDraft = { name: "", school: "", phone: "", details: "" };
+const quoteDraftKey = "edufurniture-quote-draft";
+
 const navigation = [
   { label: "회사소개", href: "#about" },
   { label: "제품소개", href: "#products" },
@@ -53,6 +63,9 @@ export default function Home() {
   const [slide, setSlide] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [quote, setQuote] = useState<QuoteDraft>(emptyQuote);
+  const [quoteReady, setQuoteReady] = useState(false);
+  const [submitState, setSubmitState] = useState<"idle" | "sending" | "success" | "error">("idle");
 
   useEffect(() => {
     if (paused) return;
@@ -60,18 +73,58 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [paused]);
 
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(quoteDraftKey);
+      if (saved) setQuote({ ...emptyQuote, ...JSON.parse(saved) });
+    } catch {
+      window.sessionStorage.removeItem(quoteDraftKey);
+    } finally {
+      setQuoteReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!quoteReady || submitState === "success") return;
+    const hasDraft = Object.values(quote).some((value) => value.trim());
+    if (hasDraft) window.sessionStorage.setItem(quoteDraftKey, JSON.stringify(quote));
+    else window.sessionStorage.removeItem(quoteDraftKey);
+  }, [quote, quoteReady, submitState]);
+
   const goTo = (index: number) => setSlide((index + portfolio.length) % portfolio.length);
 
-  const submitQuote = (event: FormEvent<HTMLFormElement>) => {
+  const updateQuote = (field: keyof QuoteDraft, value: string) => {
+    setQuote((current) => ({ ...current, [field]: value }));
+    if (submitState !== "idle") setSubmitState("idle");
+  };
+
+  const submitQuote = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const name = String(data.get("name") || "");
-    const school = String(data.get("school") || "");
-    const phone = String(data.get("phone") || "");
-    const details = String(data.get("details") || "");
-    const subject = encodeURIComponent(`[견적문의] ${school || name}`);
-    const body = encodeURIComponent(`담당자: ${name}\n학교/기관: ${school}\n연락처: ${phone}\n\n문의 내용\n${details}`);
-    window.location.href = `mailto:bmgshin@naver.com?subject=${subject}&body=${body}`;
+    if (String(data.get("website") || "")) return;
+    setSubmitState("sending");
+
+    try {
+      const response = await fetch("https://formsubmit.co/ajax/bmgshin@naver.com", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          담당자명: quote.name,
+          "학교 / 기관명": quote.school,
+          연락처: quote.phone,
+          "문의 내용": quote.details,
+          _subject: `[에듀퍼니처 견적문의] ${quote.school || quote.name}`,
+          _template: "table",
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error("메일 전송에 실패했습니다.");
+      window.sessionStorage.removeItem(quoteDraftKey);
+      setQuote(emptyQuote);
+      setSubmitState("success");
+    } catch {
+      setSubmitState("error");
+    }
   };
 
   return (
@@ -114,7 +167,7 @@ export default function Home() {
                 <div className="slide-shade" />
                 <div className="hero-copy">
                   <p><span>EDUFURNITURE</span> 학교용 제작가구 전문</p>
-                  <h1>배움이 시작되는 곳,<br /><em>좋은 가구</em>에서 시작됩니다.</h1>
+                  <h1>배움이 시작되는 곳,<br /><em>좋은 가구</em>에서 시작됩니다</h1>
                   <div className="project-caption">
                     <span>{item.type}</span>
                     <strong>{item.title}</strong>
@@ -142,7 +195,7 @@ export default function Home() {
         <section className="about section" id="about">
           <div className="section-heading">
             <p>ABOUT EDUFURNITURE</p>
-            <h2>학교를 이해하는 가구,<br />현장을 생각하는 제작.</h2>
+            <h2>학교를 이해하는 가구,<br />현장을 생각하는 제작</h2>
           </div>
           <div className="about-copy">
             <p>에듀퍼니처는 학교와 교육기관에 필요한 책걸상 및 교육용·사무용 가구를 제작·납품합니다. 매일 사용하는 가구인 만큼 안전성, 내구성, 편안함을 가장 먼저 생각합니다.</p>
@@ -159,7 +212,7 @@ export default function Home() {
         <section className="products section" id="products">
           <div className="section-heading light">
             <p>OUR PRODUCTS</p>
-            <h2>배움의 모든 공간을<br />에듀퍼니처로.</h2>
+            <h2>배움의 모든 공간을<br />에듀퍼니처로</h2>
           </div>
           <div className="product-list">
             {products.map((product) => (
@@ -195,12 +248,15 @@ export default function Home() {
             </div>
           </div>
           <form onSubmit={submitQuote}>
-            <label>담당자명<input name="name" required placeholder="성함을 입력해 주세요" /></label>
-            <label>학교 / 기관명<input name="school" required placeholder="학교 또는 기관명을 입력해 주세요" /></label>
-            <label>연락처<input name="phone" type="tel" required placeholder="010-0000-0000" /></label>
-            <label>문의 내용<textarea name="details" required placeholder="필요한 제품, 수량, 납품 희망일 등을 알려주세요." /></label>
-            <p>제출하면 기본 메일 앱에서 문의 메일이 작성됩니다.</p>
-            <button type="submit">견적 문의 보내기 <span>↗</span></button>
+            <label>담당자명<input name="name" required value={quote.name} onChange={(event) => updateQuote("name", event.target.value)} placeholder="성함을 입력해 주세요" /></label>
+            <label>학교 / 기관명<input name="school" required value={quote.school} onChange={(event) => updateQuote("school", event.target.value)} placeholder="학교 또는 기관명을 입력해 주세요" /></label>
+            <label>연락처<input name="phone" type="tel" required value={quote.phone} onChange={(event) => updateQuote("phone", event.target.value)} placeholder="010-0000-0000" /></label>
+            <label>문의 내용<textarea name="details" required value={quote.details} onChange={(event) => updateQuote("details", event.target.value)} placeholder="필요한 제품, 수량, 납품 희망일 등을 알려주세요." /></label>
+            <label className="honey-field" aria-hidden="true">웹사이트<input name="website" tabIndex={-1} autoComplete="off" /></label>
+            <p>작성 내용은 현재 탭에 임시 저장되며, 전송 성공 즉시 삭제됩니다. 문의 정보는 메일 전송 서비스(FormSubmit)를 통해 전달되고 최대 30일간 보관될 수 있습니다.</p>
+            {submitState === "success" && <div className="form-status success" role="status">견적 문의가 전송되었습니다. 확인 후 연락드리겠습니다.</div>}
+            {submitState === "error" && <div className="form-status error" role="alert">전송하지 못했습니다. 잠시 후 다시 시도하거나 010.2313.0520으로 연락해 주세요.</div>}
+            <button type="submit" disabled={submitState === "sending"}>{submitState === "sending" ? "전송 중입니다…" : "견적 문의 보내기"} <span>{submitState === "sending" ? "·" : "↗"}</span></button>
           </form>
         </section>
 
