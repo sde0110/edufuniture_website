@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 type QuoteDraft = {
   name: string;
@@ -53,11 +53,13 @@ const portfolio = [
 ];
 
 const products = [
-  { number: "01", name: "학생용 책걸상", copy: "학생의 성장과 바른 자세를 고려한 견고한 기본형 제품", tag: "Classroom" },
-  { number: "02", name: "교사용 가구", copy: "수업 준비와 교실 운영을 효율적으로 돕는 교탁·책상·수납장", tag: "Teacher" },
-  { number: "03", name: "특별교실 가구", copy: "과학실, 도서실, 돌봄교실 등 목적에 맞춘 공간별 구성", tag: "Special Room" },
-  { number: "04", name: "맞춤 제작 가구", copy: "학교 현장 실측부터 제작·납품까지 공간에 꼭 맞는 제안", tag: "Custom" },
+  { key: "student", number: "01", name: "학생용 책걸상", copy: "학생의 성장과 바른 자세를 고려한 견고한 기본형 제품", tag: "Classroom" },
+  { key: "teacher", number: "02", name: "교사용 가구", copy: "수업 준비와 교실 운영을 효율적으로 돕는 교탁·책상·수납장", tag: "Teacher" },
+  { key: "special", number: "03", name: "특별교실 가구", copy: "과학실, 도서실, 돌봄교실 등 목적에 맞춘 공간별 구성", tag: "Special Room" },
+  { key: "custom", number: "04", name: "맞춤 제작 가구", copy: "학교 현장 실측부터 제작·납품까지 공간에 꼭 맞는 제안", tag: "Custom" },
 ];
+
+type ProductImage = { id: string; product_key: string; filename: string };
 
 export default function Home() {
   const [slide, setSlide] = useState(0);
@@ -66,6 +68,8 @@ export default function Home() {
   const [quote, setQuote] = useState<QuoteDraft>(emptyQuote);
   const [quoteReady, setQuoteReady] = useState(false);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [productImages, setProductImages] = useState<ProductImage[]>([]);
+  const copyrightClicks = useRef<number[]>([]);
 
   useEffect(() => {
     if (paused) return;
@@ -91,6 +95,10 @@ export default function Home() {
     else window.sessionStorage.removeItem(quoteDraftKey);
   }, [quote, quoteReady, submitState]);
 
+  useEffect(() => {
+    fetch("/api/products").then((response) => response.json()).then((data) => setProductImages(data.images ?? [])).catch(() => setProductImages([]));
+  }, []);
+
   const goTo = (index: number) => setSlide((index + portfolio.length) % portfolio.length);
 
   const updateQuote = (field: keyof QuoteDraft, value: string) => {
@@ -105,26 +113,28 @@ export default function Home() {
     setSubmitState("sending");
 
     try {
-      const response = await fetch("https://formsubmit.co/ajax/bmgshin@naver.com", {
+      const response = await fetch("/api/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          담당자명: quote.name,
-          "학교 / 기관명": quote.school,
-          연락처: quote.phone,
-          "문의 내용": quote.details,
-          _subject: `[에듀퍼니처 견적문의] ${quote.school || quote.name}`,
-          _template: "table",
+          ...quote,
+          website: String(data.get("website") || ""),
         }),
       });
       const result = await response.json();
-      if (!response.ok || result.success === false) throw new Error("메일 전송에 실패했습니다.");
+      if (!response.ok || !result.ok) throw new Error("문의 접수에 실패했습니다.");
       window.sessionStorage.removeItem(quoteDraftKey);
       setQuote(emptyQuote);
       setSubmitState("success");
     } catch {
       setSubmitState("error");
     }
+  };
+
+  const openAdminOnTripleClick = () => {
+    const now = Date.now();
+    copyrightClicks.current = [...copyrightClicks.current.filter((time) => now - time < 1200), now];
+    if (copyrightClicks.current.length >= 3) window.location.href = "/admin";
   };
 
   return (
@@ -218,7 +228,7 @@ export default function Home() {
             {products.map((product) => (
               <article key={product.number}>
                 <span>{product.number}</span>
-                <div><small>{product.tag}</small><h3>{product.name}</h3><p>{product.copy}</p></div>
+                <div><small>{product.tag}</small><h3>{product.name}</h3><p>{product.copy}</p>{productImages.some((image) => image.product_key === product.key) && <div className="product-gallery">{productImages.filter((image) => image.product_key === product.key).map((image) => <img key={image.id} src={`/api/product-images/${image.id}`} alt={`${product.name} - ${image.filename}`} />)}</div>}</div>
                 <i>↗</i>
               </article>
             ))}
@@ -263,7 +273,7 @@ export default function Home() {
         <footer>
           <a className="brand footer-brand" href="#top"><img src="/assets/edufurniture-logo.png" alt="에듀퍼니처 Edufurniture" /></a>
           <p>대표 신인수　|　교육용·사무용 제작가구<br />M. 010.2313.0520　F. 050.4223.0520　E. bmgshin@naver.com</p>
-          <small>© {new Date().getFullYear()} EDUFURNITURE. ALL RIGHTS RESERVED.</small>
+          <button className="copyright-trigger" onClick={openAdminOnTripleClick} aria-label="저작권 정보">© {new Date().getFullYear()} EDUFURNITURE. ALL RIGHTS RESERVED.</button>
         </footer>
       </div>
     </main>
