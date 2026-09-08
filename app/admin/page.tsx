@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { upload as uploadBlob } from "@vercel/blob/client";
 
 type Inquiry = {
   id: string; name: string; school: string; phone: string; details: string;
@@ -52,10 +53,29 @@ export default function AdminPage() {
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setLoading(true); setError("");
-    const response = await fetch("/api/admin/data", { method: "POST", body: new FormData(event.currentTarget) });
-    const data = await response.json(); setLoading(false);
-    if (!response.ok) return setError(data.error ?? "업로드하지 못했습니다.");
-    event.currentTarget.reset(); await loadData();
+    const form = new FormData(event.currentTarget);
+    const productKey = String(form.get("productKey") ?? "");
+    const file = form.get("image");
+    if (!(file instanceof File) || !file.size) { setLoading(false); return setError("이미지를 선택해 주세요."); }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 8 * 1024 * 1024) {
+      setLoading(false); return setError("JPG, PNG, WebP 파일만 8MB 이하로 올릴 수 있습니다.");
+    }
+    try {
+      const bytes = new TextEncoder().encode(file.name.slice(0, 200));
+      let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte);
+      const encodedName = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      await uploadBlob(`products/${productKey}/${crypto.randomUUID()}/${encodedName}`, file, {
+        access: "private",
+        contentType: file.type,
+        handleUploadUrl: "/api/admin/upload",
+        multipart: true,
+      });
+      event.currentTarget.reset(); await loadData();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "업로드하지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const removeImage = async (id: string) => {

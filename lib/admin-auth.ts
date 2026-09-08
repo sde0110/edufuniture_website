@@ -1,10 +1,11 @@
-import { bindings, ensureSchema, json } from "./platform";
+import { deleteBlob, readJson, writeJson } from "./blob-storage";
+import { json } from "./platform";
 
 export const adminCookie = "edufurniture_admin";
 const sessionHours = 8;
 
 function secret(name: "ADMIN_PASSWORD" | "ADMIN_SESSION_SECRET") {
-  const value = bindings()[name];
+  const value = process.env[name];
   if (!value) throw new Error(`${name} is not configured`);
   return value;
 }
@@ -71,29 +72,29 @@ export function sameOrigin(request: Request) {
 }
 
 async function loginKey(request: Request) {
-  const ip = request.headers.get("cf-connecting-ip") ?? "local";
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? "local";
   return bytesToBase64Url(await digest(`edufurniture:${ip}`));
 }
 
+type LoginAttempt = { attempts: number; locked_until: string | null; updated_at: string };
+
+async function attemptPath(request: Request) {
+  return `security/login/${await loginKey(request)}.json`;
+}
+
 export async function loginAllowed(request: Request) {
-  await ensureSchema();
-  const key = await loginKey(request);
-  const row = await bindings().DB.prepare("SELECT attempts, locked_until FROM admin_login_attempts WHERE key = ?").bind(key).first<{ attempts: number; locked_until: string | null }>();
+  const row = await readJson<LoginAttempt>(await attemptPath(request));
   return !row?.locked_until || new Date(row.locked_until).getTime() <= Date.now();
 }
 
 export async function recordLoginFailure(request: Request) {
-  await ensureSchema();
-  const key = await loginKey(request);
-  const current = await bindings().DB.prepare("SELECT attempts FROM admin_login_attempts WHERE key = ?").bind(key).first<{ attempts: number }>();
+  const pathname = await attemptPath(request);
+  const current = await readJson<LoginAttempt>(pathname);
   const attempts = (current?.attempts ?? 0) + 1;
   const lockedUntil = attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null;
-  await bindings().DB.prepare(`INSERT INTO admin_login_attempts (key, attempts, locked_until, updated_at)
-    VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET attempts = excluded.attempts, locked_until = excluded.locked_until, updated_at = excluded.updated_at`)
-    .bind(key, attempts >= 5 ? 0 : attempts, lockedUntil, new Date().toISOString()).run();
+  await writeJson(pathname, { attempts: attempts >= 5 ? 0 : attempts, locked_until: lockedUntil, updated_at: new Date().toISOString() }, Boolean(current));
 }
 
 export async function clearLoginFailures(request: Request) {
-  await ensureSchema();
-  await bindings().DB.prepare("DELETE FROM admin_login_attempts WHERE key = ?").bind(await loginKey(request)).run();
+  await deleteBlob(await attemptPath(request));
 }

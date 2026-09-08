@@ -1,19 +1,21 @@
-import { bindings, ensureSchema, json } from "@/lib/platform";
+import { get } from "@vercel/blob";
+import { findProductImage } from "@/lib/blob-storage";
+import { json } from "@/lib/platform";
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  await ensureSchema();
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const row = await bindings().DB.prepare("SELECT object_key, content_type, filename FROM product_images WHERE id = ?")
-    .bind(id).first<{ object_key: string; content_type: string; filename: string }>();
-  if (!row) return json({ error: "이미지를 찾을 수 없습니다." }, { status: 404 });
-  const object = await bindings().UPLOADS.get(row.object_key);
-  if (!object) return json({ error: "이미지를 찾을 수 없습니다." }, { status: 404 });
-  return new Response(object.body, {
+  const image = await findProductImage(id);
+  if (!image) return json({ error: "이미지를 찾을 수 없습니다." }, { status: 404 });
+  const result = await get(image.pathname, { access: "private", ifNoneMatch: request.headers.get("if-none-match") ?? undefined });
+  if (!result) return json({ error: "이미지를 찾을 수 없습니다." }, { status: 404 });
+  if (result.statusCode === 304) return new Response(null, { status: 304, headers: { ETag: result.blob.etag, "Cache-Control": "public, max-age=86400" } });
+  return new Response(result.stream, {
     headers: {
-      "Content-Type": row.content_type,
+      "Content-Type": result.blob.contentType ?? "application/octet-stream",
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "public, max-age=86400",
-      ETag: object.httpEtag,
-      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(row.filename)}`,
+      ETag: result.blob.etag,
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(image.filename)}`,
     },
   });
 }

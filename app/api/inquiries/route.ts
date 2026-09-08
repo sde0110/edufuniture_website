@@ -1,4 +1,5 @@
-import { bindings, ensureSchema, json } from "@/lib/platform";
+import { inquiryPath, type Inquiry, writeJson } from "@/lib/blob-storage";
+import { json } from "@/lib/platform";
 
 const limits = { name: 50, school: 100, phone: 30, details: 2000 };
 
@@ -16,12 +17,11 @@ export async function POST(request: Request) {
       return json({ error: "입력 내용이 너무 깁니다." }, { status: 400 });
     }
 
-    await ensureSchema();
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    await bindings().DB.prepare(`INSERT INTO inquiries (id, name, school, phone, details, status, email_status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'new', 'pending', ?)`)
-      .bind(id, name, school, phone, details, createdAt).run();
+    const inquiry: Inquiry = { id, name, school, phone, details, status: "new", email_status: "pending", created_at: createdAt };
+    const pathname = inquiryPath(inquiry);
+    await writeJson(pathname, inquiry);
 
     let emailSent = false;
     try {
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
     } catch {
       emailSent = false;
     }
-    await bindings().DB.prepare("UPDATE inquiries SET email_status = ? WHERE id = ?").bind(emailSent ? "sent" : "failed", id).run();
+    inquiry.email_status = emailSent ? "sent" : "failed";
+    await writeJson(pathname, inquiry, true);
     return json({ ok: true, id, emailSent }, { status: 201 });
   } catch {
     return json({ error: "문의 접수 중 오류가 발생했습니다." }, { status: 500 });
