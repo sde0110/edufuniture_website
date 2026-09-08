@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin-auth";
-import { deleteBlob, findInquiryBlob, findProductImage, findProductPostBlob, listInquiries, listProductImages, listProductPosts, productPostPath, readJson, type Inquiry, type ProductPost, writeJson } from "@/lib/blob-storage";
+import { deleteBlob, findProductImage, findProductPostBlob, listInquiries, listProductImages, listProductPosts, productPostPath, readJson, type ProductPost, writeInquiryUpdate, writeJson } from "@/lib/blob-storage";
 import { json } from "@/lib/platform";
 
 const productKeys = new Set(["student", "teacher", "special", "custom"]);
@@ -38,12 +38,9 @@ export async function PATCH(request: Request) {
   if (denied) return denied;
   const body = await request.json() as { id?: string; status?: string };
   if (!body.id || !["new", "read", "done"].includes(String(body.status))) return json({ error: "잘못된 상태입니다." }, { status: 400 });
-  const blob = await findInquiryBlob(body.id);
-  if (!blob) return json({ error: "문의를 찾을 수 없습니다." }, { status: 404 });
-  const inquiry = await readJson<Inquiry>(blob.pathname);
+  const inquiry = (await listInquiries()).find((item) => item.id === body.id);
   if (!inquiry) return json({ error: "문의를 찾을 수 없습니다." }, { status: 404 });
-  inquiry.status = body.status as Inquiry["status"];
-  await writeJson(blob.pathname, inquiry, true);
+  await writeInquiryUpdate(body.id, { status: body.status as "new" | "read" | "done" });
   return json({ ok: true });
 }
 

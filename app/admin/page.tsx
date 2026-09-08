@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { upload as uploadBlob } from "@vercel/blob/client";
 
 type Inquiry = {
-  id: string; name: string; school: string; phone: string; details: string;
+  id: string; name: string; school: string; phone: string; email?: string; details: string;
   status: "new" | "read" | "done"; email_status: string; created_at: string;
 };
 type ProductImage = { id: string; product_key: string; filename: string; size: number; created_at: string };
@@ -27,6 +27,10 @@ export default function AdminPage() {
   const [posts, setPosts] = useState<ProductPost[]>([]);
   const [tab, setTab] = useState<"inquiries" | "products">("inquiries");
   const [uploadTotal, setUploadTotal] = useState(0);
+  const [inquiryFilter, setInquiryFilter] = useState<"all" | Inquiry["status"]>("all");
+  const [inquiryQuery, setInquiryQuery] = useState("");
+  const [updatingInquiry, setUpdatingInquiry] = useState<string | null>(null);
+  const [inquiryError, setInquiryError] = useState("");
 
   const loadData = useCallback(async () => {
     const response = await fetch("/api/admin/data", { cache: "no-store" });
@@ -51,8 +55,17 @@ export default function AdminPage() {
   const logout = async () => { await fetch("/api/admin/logout", { method: "POST" }); setAuthenticated(false); };
 
   const updateStatus = async (id: string, status: Inquiry["status"]) => {
-    await fetch("/api/admin/data", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
-    setInquiries((items) => items.map((item) => item.id === id ? { ...item, status } : item));
+    setUpdatingInquiry(id); setInquiryError("");
+    try {
+      const response = await fetch("/api/admin/data", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "문의 상태를 변경하지 못했습니다.");
+      setInquiries((items) => items.map((item) => item.id === id ? { ...item, status } : item));
+    } catch (statusError) {
+      setInquiryError(statusError instanceof Error ? statusError.message : "문의 상태를 변경하지 못했습니다.");
+    } finally {
+      setUpdatingInquiry(null);
+    }
   };
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
@@ -119,6 +132,13 @@ export default function AdminPage() {
     if (response.ok) setImages((items) => items.filter((item) => item.id !== id));
   };
 
+  const normalizedQuery = inquiryQuery.trim().toLowerCase();
+  const visibleInquiries = inquiries.filter((item) => {
+    if (inquiryFilter !== "all" && item.status !== inquiryFilter) return false;
+    if (!normalizedQuery) return true;
+    return [item.name, item.school, item.phone, item.email ?? "", item.details].some((value) => value.toLowerCase().includes(normalizedQuery));
+  });
+
   if (authenticated === null) return <main className="admin-loading">관리자 페이지를 불러오는 중입니다…</main>;
 
   if (!authenticated) return (
@@ -142,12 +162,14 @@ export default function AdminPage() {
         <section className="admin-content">
           {tab === "inquiries" ? <>
             <div className="admin-title"><div><p>INQUIRIES</p><h1>견적 문의 관리</h1></div><span>총 {inquiries.length}건</span></div>
+            <div className="inquiry-tools"><div className="inquiry-filters"><button className={inquiryFilter === "all" ? "active" : ""} onClick={() => setInquiryFilter("all")}>전체 {inquiries.length}</button><button className={inquiryFilter === "new" ? "active" : ""} onClick={() => setInquiryFilter("new")}>읽지 않음 {inquiries.filter((item) => item.status === "new").length}</button><button className={inquiryFilter === "read" ? "active" : ""} onClick={() => setInquiryFilter("read")}>확인함 {inquiries.filter((item) => item.status === "read").length}</button><button className={inquiryFilter === "done" ? "active" : ""} onClick={() => setInquiryFilter("done")}>처리 완료 {inquiries.filter((item) => item.status === "done").length}</button></div><label><span>문의 검색</span><input type="search" value={inquiryQuery} onChange={(event) => setInquiryQuery(event.target.value)} placeholder="학교, 담당자, 전화, 이메일 검색" /></label></div>
+            {inquiryError && <div className="admin-error" role="alert">{inquiryError}</div>}
             <div className="inquiry-list">
-              {inquiries.length === 0 && <div className="admin-empty">아직 접수된 문의가 없습니다.</div>}
-              {inquiries.map((item) => <article key={item.id} className={item.status === "new" ? "new" : ""}>
-                <div className="inquiry-head"><span>{item.status === "new" ? "새 문의" : item.status === "done" ? "처리 완료" : "확인함"}</span><time>{new Date(item.created_at).toLocaleString("ko-KR")}</time></div>
-                <h2>{item.school}</h2><dl><div><dt>담당자</dt><dd>{item.name}</dd></div><div><dt>연락처</dt><dd><a href={`tel:${item.phone}`}>{item.phone}</a></dd></div><div><dt>메일</dt><dd>{item.email_status === "sent" ? "전송됨" : "관리자 페이지에 저장됨"}</dd></div></dl>
-                <p>{item.details}</p><div className="inquiry-actions"><button onClick={() => updateStatus(item.id, "read")}>확인함</button><button onClick={() => updateStatus(item.id, "done")}>처리 완료</button></div>
+              {visibleInquiries.length === 0 && <div className="admin-empty">조건에 맞는 문의가 없습니다.</div>}
+              {visibleInquiries.map((item) => <article key={item.id} className={`inquiry-${item.status}`}>
+                <div className="inquiry-head"><span>{item.status === "new" ? "읽지 않음" : item.status === "done" ? "처리 완료" : "확인함"}</span><time>{new Date(item.created_at).toLocaleString("ko-KR")}</time></div>
+                <h2>{item.school}</h2><dl><div><dt>담당자</dt><dd>{item.name}</dd></div><div><dt>연락처</dt><dd><a href={`tel:${item.phone}`}>{item.phone}</a></dd></div><div><dt>이메일</dt><dd>{item.email ? <a href={`mailto:${item.email}`}>{item.email}</a> : <span>기존 문의 · 미입력</span>}</dd></div><div><dt>메일 전달</dt><dd>{item.email_status === "sent" ? "전송됨" : item.email_status === "pending" ? "전송 중" : "저장됨"}</dd></div></dl>
+                <p>{item.details}</p><div className="inquiry-actions"><button className={item.status === "new" ? "active" : ""} disabled={updatingInquiry === item.id} onClick={() => updateStatus(item.id, "new")}>읽지 않음</button><button className={item.status === "read" ? "active" : ""} disabled={updatingInquiry === item.id} onClick={() => updateStatus(item.id, "read")}>확인함</button><button className={item.status === "done" ? "active" : ""} disabled={updatingInquiry === item.id} onClick={() => updateStatus(item.id, "done")}>처리 완료</button></div>
               </article>)}
             </div>
           </> : <>

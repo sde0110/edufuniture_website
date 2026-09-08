@@ -5,10 +5,18 @@ export type Inquiry = {
   name: string;
   school: string;
   phone: string;
+  email?: string;
   details: string;
   status: "new" | "read" | "done";
   email_status: "pending" | "sent" | "failed";
   created_at: string;
+};
+
+type InquiryUpdate = {
+  id: string;
+  status?: Inquiry["status"];
+  email_status?: Inquiry["email_status"];
+  updated_at: string;
 };
 
 export type ProductImage = {
@@ -61,9 +69,21 @@ export async function listAll(prefix: string) {
 }
 
 export async function listInquiries() {
-  const blobs = await listAll("inquiries/");
-  const records = await Promise.all(blobs.map((blob) => readJson<Inquiry>(blob.pathname)));
-  return records.filter((item): item is Inquiry => Boolean(item)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const [blobs, updateBlobs] = await Promise.all([listAll("inquiries/"), listAll("inquiry-updates/")]);
+  const [records, updates] = await Promise.all([
+    Promise.all(blobs.map((blob) => readJson<Inquiry>(blob.pathname))),
+    Promise.all(updateBlobs.map((blob) => readJson<InquiryUpdate>(blob.pathname))),
+  ]);
+  const validUpdates = updates.filter((item): item is InquiryUpdate => Boolean(item)).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  return records.filter((item): item is Inquiry => Boolean(item)).map((inquiry) => {
+    const changes = validUpdates.filter((update) => update.id === inquiry.id);
+    return changes.reduce((current, update) => ({ ...current, ...update, created_at: inquiry.created_at }), inquiry);
+  }).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function writeInquiryUpdate(id: string, changes: Pick<InquiryUpdate, "status" | "email_status">) {
+  const update: InquiryUpdate = { id, ...changes, updated_at: new Date().toISOString() };
+  await writeJson(`inquiry-updates/${id}/${Date.now()}-${crypto.randomUUID()}.json`, update);
 }
 
 export async function findInquiryBlob(id: string) {

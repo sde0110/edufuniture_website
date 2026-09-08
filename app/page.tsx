@@ -7,10 +7,11 @@ type QuoteDraft = {
   name: string;
   school: string;
   phone: string;
+  email: string;
   details: string;
 };
 
-const emptyQuote: QuoteDraft = { name: "", school: "", phone: "", details: "" };
+const emptyQuote: QuoteDraft = { name: "", school: "", phone: "", email: "", details: "" };
 const quoteDraftKey = "edufurniture-quote-draft";
 
 const navigation = [
@@ -255,7 +256,8 @@ export default function Home() {
             <label>담당자명<input name="name" required value={quote.name} onChange={(event) => updateQuote("name", event.target.value)} placeholder="성함을 입력해 주세요" /></label>
             <label>학교 / 기관명<input name="school" required value={quote.school} onChange={(event) => updateQuote("school", event.target.value)} placeholder="학교 또는 기관명을 입력해 주세요" /></label>
             <label>연락처<input name="phone" type="tel" required value={quote.phone} onChange={(event) => updateQuote("phone", event.target.value)} placeholder="010-0000-0000" /></label>
-            <label>문의 내용<textarea name="details" required value={quote.details} onChange={(event) => updateQuote("details", event.target.value)} placeholder="필요한 제품, 수량, 납품 희망일 등을 알려주세요." /></label>
+            <label>이메일<input name="email" type="email" required value={quote.email} onChange={(event) => updateQuote("email", event.target.value)} placeholder="name@example.com" /></label>
+            <label className="contact-details">문의 내용<textarea name="details" required value={quote.details} onChange={(event) => updateQuote("details", event.target.value)} placeholder="필요한 제품, 수량, 납품 희망일 등을 알려주세요." /></label>
             <label className="honey-field" aria-hidden="true">웹사이트<input name="website" tabIndex={-1} autoComplete="off" /></label>
             <p>작성 내용은 현재 탭에 임시 저장되며, 전송 성공 즉시 삭제됩니다. 문의 정보는 메일 전송 서비스(FormSubmit)를 통해 전달되고 최대 30일간 보관될 수 있습니다.</p>
             {submitState === "success" && <div className="form-status success" role="status">견적 문의가 전송되었습니다. 확인 후 연락드리겠습니다.</div>}
