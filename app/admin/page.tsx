@@ -53,7 +53,8 @@ export default function AdminPage() {
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setLoading(true); setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const productKey = String(form.get("productKey") ?? "");
     const file = form.get("image");
     if (!(file instanceof File) || !file.size) { setLoading(false); return setError("이미지를 선택해 주세요."); }
@@ -70,7 +71,8 @@ export default function AdminPage() {
         handleUploadUrl: "/api/admin/upload",
         multipart: true,
       });
-      event.currentTarget.reset(); await loadData();
+      formElement.reset();
+      await loadData();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "업로드하지 못했습니다.");
     } finally {

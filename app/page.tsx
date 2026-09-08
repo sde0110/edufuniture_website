@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 type QuoteDraft = {
   name: string;
@@ -226,11 +227,11 @@ export default function Home() {
           </div>
           <div className="product-list">
             {products.map((product) => (
-              <article key={product.number}>
+              <Link className="product-card" href={`/products/${product.key}`} key={product.number} aria-label={`${product.name} 자세히 보기`}>
                 <span>{product.number}</span>
-                <div><small>{product.tag}</small><h3>{product.name}</h3><p>{product.copy}</p>{productImages.some((image) => image.product_key === product.key) && <div className="product-gallery">{productImages.filter((image) => image.product_key === product.key).map((image) => <img key={image.id} src={`/api/product-images/${image.id}`} alt={`${product.name} - ${image.filename}`} />)}</div>}</div>
+                <div><small>{product.tag}</small><h3>{product.name}</h3><p>{product.copy}</p>{productImages.some((image) => image.product_key === product.key) && <div className="product-gallery">{productImages.filter((image) => image.product_key === product.key).slice(0, 3).map((image) => <img key={image.id} src={`/api/product-images/${image.id}`} alt={`${product.name} - ${image.filename}`} />)}</div>}</div>
                 <i>↗</i>
-              </article>
+              </Link>
             ))}
           </div>
         </section>
