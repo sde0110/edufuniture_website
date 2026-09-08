@@ -60,8 +60,6 @@ const products = [
   { key: "custom", number: "04", name: "맞춤 제작 가구", copy: "학교 현장 실측부터 제작·납품까지 공간에 꼭 맞는 제안", tag: "Custom" },
 ];
 
-type ProductImage = { id: string; product_key: string; filename: string };
-
 export default function Home() {
   const [slide, setSlide] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -69,7 +67,6 @@ export default function Home() {
   const [quote, setQuote] = useState<QuoteDraft>(emptyQuote);
   const [quoteReady, setQuoteReady] = useState(false);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "success" | "error">("idle");
-  const [productImages, setProductImages] = useState<ProductImage[]>([]);
   const copyrightClicks = useRef<number[]>([]);
 
   useEffect(() => {
@@ -95,10 +92,6 @@ export default function Home() {
     if (hasDraft) window.sessionStorage.setItem(quoteDraftKey, JSON.stringify(quote));
     else window.sessionStorage.removeItem(quoteDraftKey);
   }, [quote, quoteReady, submitState]);
-
-  useEffect(() => {
-    fetch("/api/products").then((response) => response.json()).then((data) => setProductImages(data.images ?? [])).catch(() => setProductImages([]));
-  }, []);
 
   const goTo = (index: number) => setSlide((index + portfolio.length) % portfolio.length);
 
@@ -229,7 +222,7 @@ export default function Home() {
             {products.map((product) => (
               <Link className="product-card" href={`/products/${product.key}`} key={product.number} aria-label={`${product.name} 자세히 보기`}>
                 <span>{product.number}</span>
-                <div><small>{product.tag}</small><h3>{product.name}</h3><p>{product.copy}</p>{productImages.some((image) => image.product_key === product.key) && <div className="product-gallery">{productImages.filter((image) => image.product_key === product.key).slice(0, 3).map((image) => <img key={image.id} src={`/api/product-images/${image.id}`} alt={`${product.name} - ${image.filename}`} />)}</div>}</div>
+                <div><small>{product.tag}</small><h3>{product.name}</h3><p>{product.copy}</p></div>
                 <i>↗</i>
               </Link>
             ))}

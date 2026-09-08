@@ -22,6 +22,15 @@ export type ProductImage = {
   url: string;
 };
 
+export type ProductPost = {
+  id: string;
+  product_key: string;
+  title: string;
+  content: string;
+  image_ids: string[];
+  created_at: string;
+};
+
 const access = "private" as const;
 
 export async function readJson<T>(pathname: string): Promise<T | null> {
@@ -95,6 +104,21 @@ export async function listProductImages(): Promise<ProductImage[]> {
 export async function findProductImage(id: string) {
   const images = await listProductImages();
   return images.find((image) => image.id === id) ?? null;
+}
+
+export function productPostPath(post: ProductPost) {
+  return `product-posts/${post.product_key}/${Date.parse(post.created_at)}-${post.id}.json`;
+}
+
+export async function listProductPosts() {
+  const blobs = await listAll("product-posts/");
+  const records = await Promise.all(blobs.map((blob) => readJson<ProductPost>(blob.pathname)));
+  return records.filter((item): item is ProductPost => Boolean(item)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function findProductPostBlob(id: string) {
+  const blobs = await listAll("product-posts/");
+  return blobs.find((blob) => blob.pathname.endsWith(`-${id}.json`)) ?? null;
 }
 
 export async function deleteBlob(urlOrPathname: string) {

@@ -8,6 +8,7 @@ type Inquiry = {
   status: "new" | "read" | "done"; email_status: string; created_at: string;
 };
 type ProductImage = { id: string; product_key: string; filename: string; size: number; created_at: string };
+type ProductPost = { id: string; product_key: string; title: string; content: string; image_ids: string[]; created_at: string };
 
 const productNames: Record<string, string> = {
   student: "학생용 책걸상",
@@ -23,6 +24,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [images, setImages] = useState<ProductImage[]>([]);
+  const [posts, setPosts] = useState<ProductPost[]>([]);
   const [tab, setTab] = useState<"inquiries" | "products">("inquiries");
   const [uploadTotal, setUploadTotal] = useState(0);
 
@@ -32,6 +34,7 @@ export default function AdminPage() {
     const data = await response.json();
     setInquiries(data.inquiries ?? []);
     setImages(data.images ?? []);
+    setPosts(data.posts ?? []);
     setAuthenticated(true);
   }, []);
 
@@ -64,17 +67,30 @@ export default function AdminPage() {
     }
     setUploadTotal(files.length);
     try {
-      const results = await Promise.allSettled(files.map(async (file) => {
+      const uploads = files.map(async (file) => {
         const bytes = new TextEncoder().encode(file.name.slice(0, 200));
         let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte);
         const encodedName = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-        return uploadBlob(`products/${productKey}/${crypto.randomUUID()}/${encodedName}`, file, {
+        const id = crypto.randomUUID();
+        await uploadBlob(`products/${productKey}/${id}/${encodedName}`, file, {
           access: "private",
           contentType: file.type,
           handleUploadUrl: "/api/admin/upload",
           multipart: true,
         });
-      }));
+        return id;
+      });
+      const results = await Promise.allSettled(uploads);
+      const imageIds = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      if (imageIds.length) {
+        const response = await fetch("/api/admin/data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productKey, title: String(form.get("title") ?? ""), content: String(form.get("content") ?? ""), imageIds }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "게시글을 등록하지 못했습니다.");
+      }
       await loadData();
       const failed = results.filter((result) => result.status === "rejected").length;
       if (failed) {
@@ -89,6 +105,12 @@ export default function AdminPage() {
       setLoading(false);
       setUploadTotal(0);
     }
+  };
+
+  const removePost = async (id: string) => {
+    if (!window.confirm("이 게시글과 포함된 이미지를 모두 삭제할까요?")) return;
+    const response = await fetch(`/api/admin/data?postId=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (response.ok) await loadData();
   };
 
   const removeImage = async (id: string) => {
@@ -116,7 +138,7 @@ export default function AdminPage() {
     <main className="admin-shell">
       <header><a href="/"><img src="/assets/edufurniture-logo.png" alt="에듀퍼니처" /></a><div><strong>관리자</strong><button onClick={logout}>로그아웃</button></div></header>
       <div className="admin-body">
-        <aside><p>MANAGEMENT</p><button className={tab === "inquiries" ? "active" : ""} onClick={() => setTab("inquiries")}>견적 문의 <b>{inquiries.filter((item) => item.status === "new").length}</b></button><button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>제품 이미지 <b>{images.length}</b></button><a href="/">사이트 보기 ↗</a></aside>
+        <aside><p>MANAGEMENT</p><button className={tab === "inquiries" ? "active" : ""} onClick={() => setTab("inquiries")}>견적 문의 <b>{inquiries.filter((item) => item.status === "new").length}</b></button><button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}>제품 게시글 <b>{posts.length}</b></button><a href="/">사이트 보기 ↗</a></aside>
         <section className="admin-content">
           {tab === "inquiries" ? <>
             <div className="admin-title"><div><p>INQUIRIES</p><h1>견적 문의 관리</h1></div><span>총 {inquiries.length}건</span></div>
@@ -129,10 +151,11 @@ export default function AdminPage() {
               </article>)}
             </div>
           </> : <>
-            <div className="admin-title"><div><p>PRODUCT IMAGES</p><h1>제품 이미지 관리</h1></div><span>여러 장 선택 가능 · 각 파일 최대 8MB</span></div>
-            <form className="upload-form" onSubmit={upload}><label>제품 분류<select name="productKey" required>{Object.entries(productNames).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label><label>이미지 선택<input type="file" name="image" accept="image/jpeg,image/png,image/webp" multiple required /></label><button disabled={loading}>{loading ? `${uploadTotal}장 업로드 중…` : "이미지 업로드"}</button></form>
+            <div className="admin-title"><div><p>PRODUCT STORIES</p><h1>제품 게시글 관리</h1></div><span>제목 · 설명 · 여러 이미지 등록</span></div>
+            <form className="post-form" onSubmit={upload}><label>제품 분야<select name="productKey" required>{Object.entries(productNames).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label><label>게시글 제목<input type="text" name="title" maxLength={150} placeholder="예: 부산 ○○초등학교 교실 납품 사례" required /></label><label className="post-content-field">게시글 내용<textarea name="content" maxLength={5000} placeholder="제품 특징, 납품 내용, 공간 구성 등을 입력해 주세요." /></label><label className="post-file-field">이미지 선택<input type="file" name="image" accept="image/jpeg,image/png,image/webp" multiple required /><small>여러 장 선택 가능 · 각 파일 최대 8MB</small></label><button disabled={loading}>{loading ? `${uploadTotal}장 업로드 중…` : "게시글 등록"}</button></form>
             {error && <div className="admin-error" role="alert">{error}</div>}
-            <div className="admin-product-groups">{Object.entries(productNames).map(([key, name]) => <section key={key}><h2>{name}<span>{images.filter((item) => item.product_key === key).length}장</span></h2><div>{images.filter((item) => item.product_key === key).map((image) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={image.filename} /><figcaption><span>{image.filename}</span><button onClick={() => removeImage(image.id)}>삭제</button></figcaption></figure>)}{!images.some((item) => item.product_key === key) && <p>등록된 이미지가 없습니다.</p>}</div></section>)}</div>
+            <div className="admin-post-list">{posts.map((post) => <article key={post.id}><div><span>{productNames[post.product_key]}</span><time>{new Date(post.created_at).toLocaleDateString("ko-KR")}</time></div><h2>{post.title}</h2>{post.content && <p>{post.content}</p>}<div className="admin-post-images">{post.image_ids.map((id) => <img key={id} src={`/api/product-images/${id}`} alt="" />)}</div><button onClick={() => removePost(post.id)}>게시글 삭제</button></article>)}{posts.length === 0 && <div className="admin-empty">아직 등록된 제품 게시글이 없습니다.</div>}</div>
+            {images.some((image) => !posts.some((post) => post.image_ids.includes(image.id))) && <div className="admin-legacy-images"><h2>기존 단독 이미지</h2><p>게시글 기능 추가 전에 등록된 이미지입니다. 분야별 페이지 하단에 함께 표시됩니다.</p><div>{images.filter((image) => !posts.some((post) => post.image_ids.includes(image.id))).map((image) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={image.filename} /><figcaption><span>{image.filename}</span><button onClick={() => removeImage(image.id)}>삭제</button></figcaption></figure>)}</div></div>}
           </>}
         </section>
       </div>

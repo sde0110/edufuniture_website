@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { listProductImages } from "@/lib/blob-storage";
+import { listProductImages, listProductPosts } from "@/lib/blob-storage";
 
 const products = {
   student: {
@@ -45,7 +45,11 @@ export default async function ProductPage({ params }: { params: Promise<{ key: s
   const { key } = await params;
   if (!(key in products)) notFound();
   const product = products[key as ProductKey];
-  const images = (await listProductImages()).filter((image) => image.product_key === key);
+  const [allImages, allPosts] = await Promise.all([listProductImages(), listProductPosts()]);
+  const images = allImages.filter((image) => image.product_key === key);
+  const posts = allPosts.filter((post) => post.product_key === key);
+  const attachedImageIds = new Set(posts.flatMap((post) => post.image_ids));
+  const legacyImages = images.filter((image) => !attachedImageIds.has(image.id));
 
   return (
     <main className="product-detail">
@@ -61,8 +65,12 @@ export default async function ProductPage({ params }: { params: Promise<{ key: s
         {product.points.map((point, index) => <div key={point}><span>0{index + 1}</span><strong>{point}</strong></div>)}
       </section>
       <section className="product-detail-gallery">
-        <div><p>PRODUCT GALLERY</p><h2>제품 이미지</h2><span>관리자가 등록한 제품과 납품 사례를 확인하세요.</span></div>
-        {images.length ? <div className="product-detail-grid">{images.map((image) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={`${product.name} - ${image.filename}`} /><figcaption>{image.filename}</figcaption></figure>)}</div> : <div className="product-detail-empty"><strong>제품 이미지를 준비하고 있습니다.</strong><p>자세한 제품 구성과 납품 상담은 견적문의를 이용해 주세요.</p></div>}
+        <div><p>PRODUCT STORIES</p><h2>제품 이야기</h2><span>제품과 납품 사례를 게시글 형태로 확인하세요.</span></div>
+        <div className="product-story-list">
+          {posts.map((post) => <article className="product-story" key={post.id}><header><time>{new Date(post.created_at).toLocaleDateString("ko-KR")}</time><h2>{post.title}</h2>{post.content && <p>{post.content}</p>}</header>{post.image_ids.length > 0 && <div className={`product-story-images count-${Math.min(post.image_ids.length, 4)}`}>{post.image_ids.map((id, index) => { const image = images.find((item) => item.id === id); return image ? <figure key={id}><img src={`/api/product-images/${id}`} alt={`${post.title} 이미지 ${index + 1}`} /></figure> : null; })}</div>}</article>)}
+          {legacyImages.length > 0 && <article className="product-story"><header><p className="legacy-label">PRODUCT IMAGES</p><h2>{product.name} 제품 이미지</h2></header><div className={`product-story-images count-${Math.min(legacyImages.length, 4)}`}>{legacyImages.map((image, index) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={`${product.name} 제품 이미지 ${index + 1}`} /></figure>)}</div></article>}
+          {!posts.length && !legacyImages.length && <div className="product-detail-empty"><strong>제품 게시글을 준비하고 있습니다.</strong><p>자세한 제품 구성과 납품 상담은 견적문의를 이용해 주세요.</p></div>}
+        </div>
       </section>
       <section className="product-detail-contact"><div><p>PROJECT INQUIRY</p><h2>학교에 필요한 구성을<br />함께 찾아보세요.</h2></div><Link href="/#contact">견적 문의하기 <span>↗</span></Link></section>
     </main>
