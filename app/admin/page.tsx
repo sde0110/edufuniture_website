@@ -24,6 +24,7 @@ export default function AdminPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [tab, setTab] = useState<"inquiries" | "products">("inquiries");
+  const [uploadTotal, setUploadTotal] = useState(0);
 
   const loadData = useCallback(async () => {
     const response = await fetch("/api/admin/data", { cache: "no-store" });
@@ -56,27 +57,37 @@ export default function AdminPage() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const productKey = String(form.get("productKey") ?? "");
-    const file = form.get("image");
-    if (!(file instanceof File) || !file.size) { setLoading(false); return setError("이미지를 선택해 주세요."); }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 8 * 1024 * 1024) {
-      setLoading(false); return setError("JPG, PNG, WebP 파일만 8MB 이하로 올릴 수 있습니다.");
+    const files = form.getAll("image").filter((item): item is File => item instanceof File && item.size > 0);
+    if (!files.length) { setLoading(false); return setError("이미지를 선택해 주세요."); }
+    if (files.some((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 8 * 1024 * 1024)) {
+      setLoading(false); return setError("모든 이미지는 JPG, PNG, WebP 형식이며 각각 8MB 이하여야 합니다.");
     }
+    setUploadTotal(files.length);
     try {
-      const bytes = new TextEncoder().encode(file.name.slice(0, 200));
-      let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte);
-      const encodedName = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-      await uploadBlob(`products/${productKey}/${crypto.randomUUID()}/${encodedName}`, file, {
-        access: "private",
-        contentType: file.type,
-        handleUploadUrl: "/api/admin/upload",
-        multipart: true,
-      });
-      formElement.reset();
+      const results = await Promise.allSettled(files.map(async (file) => {
+        const bytes = new TextEncoder().encode(file.name.slice(0, 200));
+        let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte);
+        const encodedName = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+        return uploadBlob(`products/${productKey}/${crypto.randomUUID()}/${encodedName}`, file, {
+          access: "private",
+          contentType: file.type,
+          handleUploadUrl: "/api/admin/upload",
+          multipart: true,
+        });
+      }));
       await loadData();
+      const failed = results.filter((result) => result.status === "rejected").length;
+      if (failed) {
+        const succeeded = results.length - failed;
+        setError(`${succeeded}장은 업로드되었고 ${failed}장은 실패했습니다. 실패한 파일을 다시 시도해 주세요.`);
+      } else {
+        formElement.reset();
+      }
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "업로드하지 못했습니다.");
     } finally {
       setLoading(false);
+      setUploadTotal(0);
     }
   };
 
@@ -118,8 +129,8 @@ export default function AdminPage() {
               </article>)}
             </div>
           </> : <>
-            <div className="admin-title"><div><p>PRODUCT IMAGES</p><h1>제품 이미지 관리</h1></div><span>JPG · PNG · WebP / 최대 8MB</span></div>
-            <form className="upload-form" onSubmit={upload}><label>제품 분류<select name="productKey" required>{Object.entries(productNames).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label><label>이미지 선택<input type="file" name="image" accept="image/jpeg,image/png,image/webp" required /></label><button disabled={loading}>{loading ? "업로드 중…" : "이미지 업로드"}</button></form>
+            <div className="admin-title"><div><p>PRODUCT IMAGES</p><h1>제품 이미지 관리</h1></div><span>여러 장 선택 가능 · 각 파일 최대 8MB</span></div>
+            <form className="upload-form" onSubmit={upload}><label>제품 분류<select name="productKey" required>{Object.entries(productNames).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label><label>이미지 선택<input type="file" name="image" accept="image/jpeg,image/png,image/webp" multiple required /></label><button disabled={loading}>{loading ? `${uploadTotal}장 업로드 중…` : "이미지 업로드"}</button></form>
             {error && <div className="admin-error" role="alert">{error}</div>}
             <div className="admin-product-groups">{Object.entries(productNames).map(([key, name]) => <section key={key}><h2>{name}<span>{images.filter((item) => item.product_key === key).length}장</span></h2><div>{images.filter((item) => item.product_key === key).map((image) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={image.filename} /><figcaption><span>{image.filename}</span><button onClick={() => removeImage(image.id)}>삭제</button></figcaption></figure>)}{!images.some((item) => item.product_key === key) && <p>등록된 이미지가 없습니다.</p>}</div></section>)}</div>
           </>}
