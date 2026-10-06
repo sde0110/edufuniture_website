@@ -2,20 +2,16 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { upload as uploadBlob } from "@vercel/blob/client";
+import { products, findProduct } from "@/lib/site";
 
 type Inquiry = {
-  id: string; name: string; school: string; phone: string; email?: string; details: string;
+  id: string; name: string; school: string; phone: string; email?: string; products?: string[]; timeline?: string; details: string;
   status: "new" | "read" | "done"; email_status: string; created_at: string;
 };
 type ProductImage = { id: string; product_key: string; filename: string; size: number; created_at: string };
 type ProductPost = { id: string; product_key: string; title: string; content: string; image_ids: string[]; created_at: string };
 
-const productNames: Record<string, string> = {
-  student: "학생용 책걸상",
-  teacher: "교사용 가구",
-  special: "특별교실 가구",
-  custom: "맞춤 제작 가구",
-};
+const productNames: Record<string, string> = Object.fromEntries(products.map((product) => [product.key, product.name]));
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -31,6 +27,13 @@ export default function AdminPage() {
   const [inquiryQuery, setInquiryQuery] = useState("");
   const [updatingInquiry, setUpdatingInquiry] = useState<string | null>(null);
   const [inquiryError, setInquiryError] = useState("");
+  const [previews, setPreviews] = useState<string[]>([]);
+
+  useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
+
+  const choosePreview = (files: FileList | null) => {
+    setPreviews(Array.from(files ?? []).filter((file) => file.type.startsWith("image/")).map((file) => URL.createObjectURL(file)));
+  };
 
   const loadData = useCallback(async () => {
     const response = await fetch("/api/admin/data", { cache: "no-store" });
@@ -111,6 +114,7 @@ export default function AdminPage() {
         setError(`${succeeded}장은 업로드되었고 ${failed}장은 실패했습니다. 실패한 파일을 다시 시도해 주세요.`);
       } else {
         formElement.reset();
+        setPreviews([]);
       }
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "업로드하지 못했습니다.");
@@ -168,13 +172,13 @@ export default function AdminPage() {
               {visibleInquiries.length === 0 && <div className="admin-empty">조건에 맞는 문의가 없습니다.</div>}
               {visibleInquiries.map((item) => <article key={item.id} className={`inquiry-${item.status}`}>
                 <div className="inquiry-head"><span>{item.status === "new" ? "읽지 않음" : item.status === "done" ? "처리 완료" : "확인함"}</span><time>{new Date(item.created_at).toLocaleString("ko-KR")}</time></div>
-                <h2>{item.school}</h2><dl><div><dt>담당자</dt><dd>{item.name}</dd></div><div><dt>연락처</dt><dd><a href={`tel:${item.phone}`}>{item.phone}</a></dd></div><div><dt>이메일</dt><dd>{item.email ? <a href={`mailto:${item.email}`}>{item.email}</a> : <span>기존 문의 · 미입력</span>}</dd></div><div><dt>메일 전달</dt><dd>{item.email_status === "sent" ? "전송됨" : item.email_status === "pending" ? "전송 중" : "저장됨"}</dd></div></dl>
+                <h2>{item.school}</h2><dl><div><dt>담당자</dt><dd>{item.name}</dd></div><div><dt>연락처</dt><dd><a href={`tel:${item.phone}`}>{item.phone}</a></dd></div><div><dt>이메일</dt><dd>{item.email ? <a href={`mailto:${item.email}`}>{item.email}</a> : <span>미입력</span>}</dd></div>{item.products?.length ? <div><dt>관심 제품</dt><dd>{item.products.map((key) => findProduct(key)?.name ?? key).join(", ")}</dd></div> : null}{item.timeline ? <div><dt>희망 시기</dt><dd>{item.timeline}</dd></div> : null}<div><dt>메일 전달</dt><dd>{item.email_status === "sent" ? "전송됨" : item.email_status === "pending" ? "전송 중" : "저장됨"}</dd></div></dl>
                 <p>{item.details}</p><div className="inquiry-actions"><button className={item.status === "new" ? "active" : ""} disabled={updatingInquiry === item.id} onClick={() => updateStatus(item.id, "new")}>읽지 않음</button><button className={item.status === "read" ? "active" : ""} disabled={updatingInquiry === item.id} onClick={() => updateStatus(item.id, "read")}>확인함</button><button className={item.status === "done" ? "active" : ""} disabled={updatingInquiry === item.id} onClick={() => updateStatus(item.id, "done")}>처리 완료</button></div>
               </article>)}
             </div>
           </> : <>
             <div className="admin-title"><div><p>PRODUCT STORIES</p><h1>제품 게시글 관리</h1></div><span>제목 · 설명 · 여러 이미지 등록</span></div>
-            <form className="post-form" onSubmit={upload}><label>제품 분야<select name="productKey" required>{Object.entries(productNames).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label><label>게시글 제목<input type="text" name="title" maxLength={150} placeholder="예: 부산 ○○초등학교 교실 납품 사례" required /></label><label className="post-content-field">게시글 내용<textarea name="content" maxLength={5000} placeholder="제품 특징, 납품 내용, 공간 구성 등을 입력해 주세요." /></label><label className="post-file-field">이미지 선택<input type="file" name="image" accept="image/jpeg,image/png,image/webp" multiple required /><small>여러 장 선택 가능 · 각 파일 최대 8MB</small></label><button disabled={loading}>{loading ? `${uploadTotal}장 업로드 중…` : "게시글 등록"}</button></form>
+            <form className="post-form" onSubmit={upload}><label>제품 분야<select name="productKey" required>{Object.entries(productNames).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label><label>게시글 제목<input type="text" name="title" maxLength={150} placeholder="예: 부산 ○○초등학교 교실 납품 사례" required /></label><label className="post-content-field">게시글 내용<textarea name="content" maxLength={5000} placeholder="제품 특징, 납품 내용, 공간 구성 등을 입력해 주세요." /></label><label className="post-file-field">이미지 선택<input type="file" name="image" accept="image/jpeg,image/png,image/webp" multiple required onChange={(event) => choosePreview(event.target.files)} /><small>여러 장 선택 가능 · 각 파일 최대 8MB · 첫 번째 사진이 메인 화면 대표 이미지로 사용됩니다.</small>{previews.length > 0 && <span className="upload-previews">{previews.map((url, index) => <img key={url} src={url} alt={`선택한 이미지 ${index + 1}`} />)}</span>}</label><button disabled={loading}>{loading ? `${uploadTotal}장 업로드 중…` : "게시글 등록"}</button></form>
             {error && <div className="admin-error" role="alert">{error}</div>}
             <div className="admin-post-list">{posts.map((post) => <article key={post.id}><div><span>{productNames[post.product_key]}</span><time>{new Date(post.created_at).toLocaleDateString("ko-KR")}</time></div><h2>{post.title}</h2>{post.content && <p>{post.content}</p>}<div className="admin-post-images">{post.image_ids.map((id) => <img key={id} src={`/api/product-images/${id}`} alt="" />)}</div><button onClick={() => removePost(post.id)}>게시글 삭제</button></article>)}{posts.length === 0 && <div className="admin-empty">아직 등록된 제품 게시글이 없습니다.</div>}</div>
             {images.some((image) => !posts.some((post) => post.image_ids.includes(image.id))) && <div className="admin-legacy-images"><h2>기존 단독 이미지</h2><p>게시글 기능 추가 전에 등록된 이미지입니다. 분야별 페이지 하단에 함께 표시됩니다.</p><div>{images.filter((image) => !posts.some((post) => post.image_ids.includes(image.id))).map((image) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={image.filename} /><figcaption><span>{image.filename}</span><button onClick={() => removeImage(image.id)}>삭제</button></figcaption></figure>)}</div></div>}

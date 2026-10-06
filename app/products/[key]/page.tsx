@@ -1,78 +1,149 @@
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import Gallery from "../../components/Gallery";
+import SiteFooter from "../../components/SiteFooter";
+import SiteHeader from "../../components/SiteHeader";
 import { listProductImages, listProductPosts } from "@/lib/blob-storage";
+import { company, findProduct, products } from "@/lib/site";
 
-const products = {
-  student: {
-    number: "01",
-    tag: "CLASSROOM",
-    name: "학생용 책걸상",
-    headline: "매일의 배움에 편안함을 더합니다.",
-    description: "학생의 성장과 바른 자세를 고려한 견고한 학교용 책걸상입니다. 교실 규모와 학년, 수업 방식에 맞춰 제품 구성과 배치를 제안합니다.",
-    points: ["학생 체형을 고려한 규격", "매일 사용해도 견고한 구조", "학교별 수량·배치 맞춤 상담"],
-  },
-  teacher: {
-    number: "02",
-    tag: "TEACHER",
-    name: "교사용 가구",
-    headline: "수업 준비와 교실 운영을 더 효율적으로.",
-    description: "교탁, 교사용 책상, 수납장 등 선생님의 업무 동선과 교실 환경을 고려한 가구를 구성합니다.",
-    points: ["교실 동선을 고려한 설계", "수업 도구를 위한 실용적인 수납", "공간과 색상에 맞춘 제작"],
-  },
-  special: {
-    number: "03",
-    tag: "SPECIAL ROOM",
-    name: "특별교실 가구",
-    headline: "공간의 목적에 꼭 맞는 구성을 만듭니다.",
-    description: "과학실, 도서실, 돌봄교실, 다목적실 등 수업과 활동의 특성에 맞춰 안전하고 유연한 공간을 제안합니다.",
-    points: ["교실별 용도에 맞춘 구성", "안전과 관리 편의성 고려", "현장 실측 기반 맞춤 제작"],
-  },
-  custom: {
-    number: "04",
-    tag: "CUSTOM",
-    name: "맞춤 제작 가구",
-    headline: "학교의 공간과 예산에 맞는 답을 찾습니다.",
-    description: "기성 제품으로 해결하기 어려운 공간도 현장 상담과 실측을 거쳐 제작부터 납품까지 책임집니다.",
-    points: ["현장 상담 및 실측", "예산·일정을 고려한 제안", "제작부터 납품까지 일괄 진행"],
-  },
-} as const;
+// Admin writes call revalidatePath for this route, so this only bounds staleness.
+export const revalidate = 3600;
 
-type ProductKey = keyof typeof products;
+export function generateStaticParams() {
+  return products.map((product) => ({ key: product.key }));
+}
 
-export const dynamic = "force-dynamic";
+export async function generateMetadata({ params }: { params: Promise<{ key: string }> }): Promise<Metadata> {
+  const product = findProduct((await params).key);
+  if (!product) return {};
+  return { title: product.name, description: `${product.headline} ${product.description}` };
+}
+
+async function loadContent(key: string) {
+  try {
+    const [allImages, allPosts] = await Promise.all([listProductImages(), listProductPosts()]);
+    return {
+      images: allImages.filter((image) => image.product_key === key),
+      posts: allPosts.filter((post) => post.product_key === key),
+    };
+  } catch {
+    return { images: [], posts: [] };
+  }
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Seoul" });
+}
 
 export default async function ProductPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
-  if (!(key in products)) notFound();
-  const product = products[key as ProductKey];
-  const [allImages, allPosts] = await Promise.all([listProductImages(), listProductPosts()]);
-  const images = allImages.filter((image) => image.product_key === key);
-  const posts = allPosts.filter((post) => post.product_key === key);
+  const product = findProduct(key);
+  if (!product) notFound();
+
+  const { images, posts } = await loadContent(key);
+  const imageIds = new Set(images.map((image) => image.id));
   const attachedImageIds = new Set(posts.flatMap((post) => post.image_ids));
   const legacyImages = images.filter((image) => !attachedImageIds.has(image.id));
+  const cover = posts.find((post) => post.image_ids.length)?.image_ids[0];
+  const others = products.filter((item) => item.key !== product.key);
 
   return (
-    <main className="product-detail">
-      <header className="product-detail-header">
-        <Link href="/" aria-label="에듀퍼니처 메인으로"><img src="/assets/edufurniture-logo.png" alt="에듀퍼니처" /></Link>
-        <Link href="/#products">제품소개로 돌아가기</Link>
-      </header>
-      <section className="product-detail-hero">
-        <div><span>{product.number}</span><p>{product.tag}</p></div>
-        <div><h1>{product.name}</h1><h2>{product.headline}</h2><p>{product.description}</p></div>
-      </section>
-      <section className="product-detail-points" aria-label={`${product.name} 특징`}>
-        {product.points.map((point, index) => <div key={point}><span>0{index + 1}</span><strong>{point}</strong></div>)}
-      </section>
-      <section className="product-detail-gallery">
-        <div><p>PRODUCT STORIES</p><h2>제품 이야기</h2><span>제품과 납품 사례를 게시글 형태로 확인하세요.</span></div>
-        <div className="product-story-list">
-          {posts.map((post) => <article className="product-story" key={post.id}><header><time>{new Date(post.created_at).toLocaleDateString("ko-KR")}</time><h2>{post.title}</h2>{post.content && <p>{post.content}</p>}</header>{post.image_ids.length > 0 && <div className={`product-story-images count-${Math.min(post.image_ids.length, 4)}`}>{post.image_ids.map((id, index) => { const image = images.find((item) => item.id === id); return image ? <figure key={id}><img src={`/api/product-images/${id}`} alt={`${post.title} 이미지 ${index + 1}`} /></figure> : null; })}</div>}</article>)}
-          {legacyImages.length > 0 && <article className="product-story"><header><p className="legacy-label">PRODUCT IMAGES</p><h2>{product.name} 제품 이미지</h2></header><div className={`product-story-images count-${Math.min(legacyImages.length, 4)}`}>{legacyImages.map((image, index) => <figure key={image.id}><img src={`/api/product-images/${image.id}`} alt={`${product.name} 제품 이미지 ${index + 1}`} /></figure>)}</div></article>}
-          {!posts.length && !legacyImages.length && <div className="product-detail-empty"><strong>제품 게시글을 준비하고 있습니다.</strong><p>자세한 제품 구성과 납품 상담은 견적문의를 이용해 주세요.</p></div>}
-        </div>
-      </section>
-      <section className="product-detail-contact"><div><p>PROJECT INQUIRY</p><h2>학교에 필요한 구성을<br />함께 찾아보세요.</h2></div><Link href="/#contact">견적 문의하기 <span>↗</span></Link></section>
-    </main>
+    <>
+      <SiteHeader />
+      <main className="product-page">
+        <section className="product-hero">
+          <div className="container product-hero-grid">
+            <div className="product-hero-copy">
+              <nav className="breadcrumb" aria-label="현재 위치"><Link href="/">홈</Link><span aria-hidden="true">/</span><Link href="/#products">제품소개</Link><span aria-hidden="true">/</span><b>{product.name}</b></nav>
+              <p className="eyebrow">{product.number} · {product.tag}</p>
+              <h1>{product.name}</h1>
+              <p className="product-headline">{product.headline}</p>
+              <p>{product.description}</p>
+              <ul className="product-points">
+                {product.points.map((point) => <li key={point}>{point}</li>)}
+              </ul>
+              <div className="product-hero-actions">
+                <Link className="btn btn-primary btn-lg" href={`/?product=${product.key}#contact`}>이 제품 견적 문의</Link>
+                <a className="btn btn-ghost btn-lg" href={company.phoneHref}>{company.phone}</a>
+              </div>
+            </div>
+            <div className="product-hero-image">
+              <Image src={cover ? `/api/product-images/${cover}` : product.image} alt={`${product.name} 대표 이미지`} fill priority sizes="(max-width: 900px) 100vw, 50vw" />
+              {!cover && <span className="image-note">공간 구성 예시</span>}
+            </div>
+          </div>
+        </section>
+
+        <section className="section product-stories">
+          <div className="container">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">PORTFOLIO</p>
+                <h2>{product.name} 납품사례</h2>
+              </div>
+              <p>{posts.length ? `총 ${posts.length}건의 사례가 있습니다. 사진을 누르면 크게 볼 수 있습니다.` : "제품과 납품 사례를 정리하고 있습니다."}</p>
+            </div>
+
+            <div className="story-list">
+              {posts.map((post) => {
+                const postImages = post.image_ids.filter((id) => imageIds.has(id));
+                return (
+                  <article className="story" id={`post-${post.id}`} key={post.id}>
+                    <header>
+                      <time dateTime={post.created_at}>{formatDate(post.created_at)}</time>
+                      <h3>{post.title}</h3>
+                      {post.content && <p>{post.content}</p>}
+                    </header>
+                    <Gallery images={postImages.map((id, index) => ({ src: `/api/product-images/${id}`, alt: `${post.title} 사진 ${index + 1}` }))} />
+                  </article>
+                );
+              })}
+              {legacyImages.length > 0 && (
+                <article className="story">
+                  <header><h3>{product.name} 제품 이미지</h3></header>
+                  <Gallery images={legacyImages.map((image, index) => ({ src: `/api/product-images/${image.id}`, alt: `${product.name} 제품 이미지 ${index + 1}` }))} />
+                </article>
+              )}
+              {!posts.length && !legacyImages.length && (
+                <div className="empty-state">
+                  <strong>납품사례를 준비하고 있습니다.</strong>
+                  <p>제품 구성과 실제 설치 사례가 궁금하시면 편하게 문의해 주세요.<br />비슷한 학교의 납품 사진을 직접 보여드립니다.</p>
+                  <Link className="btn btn-primary" href={`/?product=${product.key}#contact`}>견적·상담 문의</Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="section other-products">
+          <div className="container">
+            <p className="eyebrow">MORE PRODUCTS</p>
+            <div className="other-grid">
+              {others.map((item) => (
+                <Link href={`/products/${item.key}`} key={item.key} className="other-card">
+                  <small>{item.number} · {item.tag}</small>
+                  <strong>{item.name}</strong>
+                  <span>{item.summary}</span>
+                  <i aria-hidden="true">→</i>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="cta-band">
+          <div className="container cta-band-inner">
+            <h2>학교에 필요한 구성을<br />함께 찾아보세요.</h2>
+            <div>
+              <Link className="btn btn-light btn-lg" href={`/?product=${product.key}#contact`}>견적 문의하기</Link>
+              <a className="btn btn-glass btn-lg" href={company.phoneHref}>전화 상담 {company.phone}</a>
+            </div>
+          </div>
+        </section>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

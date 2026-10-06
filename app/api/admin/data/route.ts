@@ -1,8 +1,14 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { deleteBlob, findProductImage, findProductPostBlob, listInquiries, listProductImages, listProductPosts, productPostPath, readJson, type ProductPost, writeInquiryUpdate, writeJson } from "@/lib/blob-storage";
+import { revalidatePath } from "next/cache";
 import { json } from "@/lib/platform";
+import { productKeys } from "@/lib/site";
 
-const productKeys = new Set(["student", "teacher", "special", "custom"]);
+function refreshPublicPages(productKey?: string) {
+  revalidatePath("/");
+  if (productKey) revalidatePath(`/products/${productKey}`);
+  else revalidatePath("/products/[key]", "page");
+}
 
 export async function GET(request: Request) {
   const denied = await requireAdmin(request);
@@ -30,6 +36,7 @@ export async function POST(request: Request) {
     image_ids: imageIds, created_at: new Date().toISOString(),
   };
   await writeJson(productPostPath(post), post);
+  refreshPublicPages(productKey);
   return json({ ok: true, post }, { status: 201 });
 }
 
@@ -61,10 +68,12 @@ export async function DELETE(request: Request) {
       }));
     }
     await deleteBlob(blob.url);
+    refreshPublicPages(post?.product_key);
     return json({ ok: true });
   }
   if (!id) return json({ error: "이미지 또는 게시글을 선택해 주세요." }, { status: 400 });
   const image = await findProductImage(id);
   if (image) await deleteBlob(image.url);
+  refreshPublicPages(image?.product_key);
   return json({ ok: true });
 }

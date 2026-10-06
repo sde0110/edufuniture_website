@@ -6,6 +6,8 @@ export type Inquiry = {
   school: string;
   phone: string;
   email?: string;
+  products?: string[];
+  timeline?: string;
   details: string;
   status: "new" | "read" | "done";
   email_status: "pending" | "sent" | "failed";

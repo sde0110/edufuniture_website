@@ -1,8 +1,8 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { requireAdmin } from "@/lib/admin-auth";
 import { json } from "@/lib/platform";
+import { productKeys } from "@/lib/site";
 
-const productKeys = new Set(["student", "teacher", "special", "custom"]);
 const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
 export async function POST(request: Request) {
