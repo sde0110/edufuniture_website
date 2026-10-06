@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
+
+const notoSans = Noto_Sans_KR({ weight: ["400", "500", "700"], subsets: ["latin"], display: "swap", variable: "--font-noto" });
 
 const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
 
@@ -30,5 +33,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ko"><body>{children}</body></html>;
+  return <html lang="ko" className={notoSans.variable}><body>{children}</body></html>;
 }

@@ -6,26 +6,19 @@ import { company, showcase } from "@/lib/site";
 
 export default function HeroSlider() {
   const [slide, setSlide] = useState(0);
-  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setInterval(() => setSlide((current) => (current + 1) % showcase.length), 6000);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => setSlide((current) => (current + 1) % showcase.length), 5000);
     return () => window.clearInterval(timer);
-  }, [paused]);
+  }, []);
 
-  const goTo = (index: number) => setSlide((index + showcase.length) % showcase.length);
   const current = showcase[slide];
 
   return (
     <section
       className="hero"
-      aria-roledescription="carousel"
       aria-label="에듀퍼니처 공간 구성 예시"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
     >
       <div className="hero-media" aria-hidden="true">
         {showcase.map((item, index) => (
@@ -47,16 +40,11 @@ export default function HeroSlider() {
         <a className="hero-phone" href={company.phoneHref}>바로 상담 <strong>{company.phone}</strong></a>
       </div>
 
-      <div className="hero-caption" aria-live="polite">
+      <div className="hero-caption">
         <div>
           <span className="chip">{current.type}</span>
           <strong>{current.title}</strong>
           <small>{current.description}</small>
-        </div>
-        <div className="hero-controls">
-          <button onClick={() => goTo(slide - 1)} aria-label="이전 이미지">←</button>
-          <span><b>{String(slide + 1).padStart(2, "0")}</b> / {String(showcase.length).padStart(2, "0")}</span>
-          <button onClick={() => goTo(slide + 1)} aria-label="다음 이미지">→</button>
         </div>
         <div className="hero-progress" aria-hidden="true">
           {showcase.map((item, index) => <i key={item.image} className={index === slide ? "active" : ""} />)}
